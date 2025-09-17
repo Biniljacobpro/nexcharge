@@ -84,7 +84,8 @@ import {
   Map,
   AttachMoney as MoneyIcon,
   Settings,
-  ExpandMore
+  ExpandMore,
+  BatteryChargingFull
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
@@ -787,6 +788,12 @@ const FranchiseOwnerDashboard = () => {
                       <Power fontSize="small" color="action" />
                       <Typography variant="body2" color="text.secondary">
                         {(station.capacity?.totalPowerCapacity || station.totalPowerCapacity || 0)} kW • {(station.capacity?.totalChargers || station.totalChargers || 0)} chargers
+                      </Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <BatteryChargingFull fontSize="small" color="action" />
+                      <Typography variant="body2" color="text.secondary">
+                        Available: {(station.capacity?.availableSlots || station.availableSlots || 0)}/{(station.capacity?.totalChargers || station.totalChargers || 0)} slots
                       </Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1} mb={1}>

@@ -16,6 +16,7 @@ import FranchiseOwnerDashboard from './pages/FranchiseOwnerDashboard';
 import StationManagerDashboard from './pages/StationManagerDashboard';
 import FirstLoginReset from './pages/FirstLoginReset';
 import StationManagerPasswordReset from './pages/StationManagerPasswordReset';
+import StationDetails from './pages/StationDetails';
 import ForgotPassword from './pages/ForgotPassword';
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
             <Route path="/station-manager/dashboard" element={<StationManagerDashboard />} />
             <Route path="/first-login-reset" element={<FirstLoginReset />} />
             <Route path="/station-manager/password-reset" element={<StationManagerPasswordReset />} />
+          <Route path="/stations/:id" element={<StationDetails />} />
           </Routes>
         </AnimatePresence>
       </Router>

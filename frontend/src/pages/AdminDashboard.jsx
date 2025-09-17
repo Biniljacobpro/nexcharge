@@ -183,8 +183,8 @@ const CorporateAdminManagementSection = ({ admins, onRefresh }) => {
       label={isActive ? 'Active' : 'Inactive'}
       size="small"
       sx={{
-        bgcolor: isActive ? 'success.light' : 'warning.light',
-        color: isActive ? 'success.main' : 'warning.main'
+        bgcolor: isActive ? 'success.main' : 'warning.main',
+        color: 'white'
       }}
     />
   );
@@ -542,8 +542,8 @@ const UserManagementSection = ({ users }) => {
                         label={u.role} 
                         size="small" 
                         sx={{ 
-                          bgcolor: u.role === 'admin' ? 'error.light' : 'primary.light',
-                          color: u.role === 'admin' ? 'error.main' : 'primary.main'
+                          bgcolor: u.role === 'admin' ? 'error.main' : 'primary.main',
+                          color: 'white'
                         }} 
                       />
                     </TableCell>
@@ -551,7 +551,7 @@ const UserManagementSection = ({ users }) => {
                       <Chip 
                         label="Active" 
                         size="small" 
-                        sx={{ bgcolor: 'success.light', color: 'success.main' }} 
+                        sx={{ bgcolor: 'success.main', color: 'white' }} 
                       />
                     </TableCell>
                     <TableCell>
@@ -949,8 +949,8 @@ const AdminDashboard = () => {
                                       label={u.role} 
                                       size="small" 
                                       sx={{ 
-                                        bgcolor: u.role === 'admin' ? 'error.light' : 'primary.light',
-                                        color: u.role === 'admin' ? 'error.main' : 'primary.main'
+                                        bgcolor: u.role === 'admin' ? 'error.main' : 'primary.main',
+                                        color: 'white'
                                       }} 
                                     />
                                   </TableCell>
@@ -958,7 +958,7 @@ const AdminDashboard = () => {
                                     <Chip 
                                       label="Active" 
                                       size="small" 
-                                      sx={{ bgcolor: 'success.light', color: 'success.main' }} 
+                                      sx={{ bgcolor: 'success.main', color: 'white' }} 
                                     />
                                   </TableCell>
                                   <TableCell>

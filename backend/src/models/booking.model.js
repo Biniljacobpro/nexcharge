@@ -1,68 +1,108 @@
 import mongoose from 'mongoose';
 
 const BookingSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  stationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Station', required: true },
-  corporateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Corporate', required: true },
-  franchiseId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  slotNumber: { type: Number, required: true },
-  startTime: { type: Date, required: true },
-  endTime: { type: Date, required: true },
-  duration: { type: Number, required: true }, // in minutes
-  amount: { type: Number, required: true },
-  status: { 
-    type: String, 
-    enum: ['pending', 'confirmed', 'in-progress', 'completed', 'cancelled', 'expired'], 
-    default: 'pending' 
+  // User who made the booking
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
-  paymentStatus: { 
-    type: String, 
-    enum: ['pending', 'paid', 'failed', 'refunded'], 
-    default: 'pending' 
+  
+  // Station and charger details
+  stationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Station',
+    required: true
   },
-  paymentMethod: { 
-    type: String, 
-    enum: ['card', 'upi', 'wallet', 'cash'], 
-    default: 'card' 
+  chargerId: {
+    type: String,
+    required: true
   },
-  paymentId: { type: String },
+  chargerType: {
+    type: String,
+    enum: ['ac_type2', 'dc_ccs', 'dc_chademo', 'dc_gbt', 'ac_3pin'],
+    required: true
+  },
+  
+  // Booking timing
+  startTime: {
+    type: Date,
+    required: true
+  },
+  endTime: {
+    type: Date,
+    required: true
+  },
+  duration: {
+    type: Number, // in minutes
+    required: true
+  },
+  
+  // Vehicle information
   vehicleInfo: {
-    type: { type: String, enum: ['car', 'bike', 'scooter', 'bus', 'truck'] },
+    make: String,
     model: String,
-    batteryCapacity: Number,
-    chargingPort: String
+    year: Number,
+    batteryCapacity: Number, // kWh
+    currentCharge: Number, // percentage
+    targetCharge: Number // percentage
   },
-  chargingDetails: {
-    initialBattery: Number,
-    finalBattery: Number,
-    energyConsumed: Number, // in kWh
-    chargingSpeed: Number // in kW
+  
+  // Pricing and payment
+  pricing: {
+    basePrice: { type: Number, required: true }, // per kWh
+    estimatedEnergy: { type: Number, default: 0 }, // kWh
+    estimatedCost: { type: Number, default: 0 }, // total cost
+    actualEnergy: { type: Number, default: 0 }, // actual kWh used
+    actualCost: { type: Number, default: 0 } // actual cost
   },
-  cancellationReason: String,
-  refundAmount: Number,
+  
+  // Booking status
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'active', 'completed', 'cancelled', 'no_show'],
+    default: 'pending'
+  },
+  
+  // Additional information
   notes: String,
-  metadata: { type: Object }
-}, { timestamps: true });
+  cancellationReason: String,
+  cancelledAt: Date,
+  cancelledBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  
+  // Check-in/out tracking
+  checkedInAt: Date,
+  checkedOutAt: Date,
+  
+  // Metadata
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, {
+  timestamps: true
+});
 
-// Indexes for better query performance
-BookingSchema.index({ userId: 1 });
-BookingSchema.index({ stationId: 1 });
-BookingSchema.index({ corporateId: 1 });
-BookingSchema.index({ franchiseId: 1 });
+// Index for efficient queries
+BookingSchema.index({ stationId: 1, startTime: 1, endTime: 1 });
+BookingSchema.index({ userId: 1, createdAt: -1 });
 BookingSchema.index({ status: 1 });
-BookingSchema.index({ createdAt: -1 });
-BookingSchema.index({ startTime: 1, endTime: 1 });
 
 // Virtual for booking duration in hours
 BookingSchema.virtual('durationHours').get(function() {
   return this.duration / 60;
 });
 
-// Pre-save middleware to calculate duration
+// Pre-save middleware to update timestamps
 BookingSchema.pre('save', function(next) {
-  if (this.startTime && this.endTime) {
-    this.duration = Math.round((this.endTime - this.startTime) / (1000 * 60)); // in minutes
-  }
+  this.updatedAt = new Date();
   next();
 });
 

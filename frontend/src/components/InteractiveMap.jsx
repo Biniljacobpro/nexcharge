@@ -24,6 +24,7 @@ import {
   Directions as DirectionsIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './InteractiveMap.css';
@@ -38,6 +39,7 @@ L.Icon.Default.mergeOptions({
 
 const InteractiveMap = () => {
   const mapRef = useRef(null);
+  const navigate = useNavigate();
   const [currentLocation, setCurrentLocation] = useState(null);
   const [map, setMap] = useState(null);
   const [nearbyStations, setNearbyStations] = useState([]);
@@ -441,12 +443,14 @@ const InteractiveMap = () => {
                       borderRadius: 2,
                       minWidth: 280,
                       border: '1px solid #e5e7eb',
+                      cursor: 'pointer',
                       '&:hover': {
                         transform: 'translateY(-2px)',
                         transition: 'transform 0.2s ease',
                         boxShadow: '0 8px 25px rgba(0,0,0,0.1)'
                       }
                     }}
+                    onClick={() => navigate(`/stations/${station.id}`)}
                   >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                       <Typography
@@ -461,7 +465,7 @@ const InteractiveMap = () => {
                       </Typography>
                       <IconButton
                         size="small"
-                        onClick={() => getDirections(station)}
+                        onClick={(e) => { e.stopPropagation(); getDirections(station); }}
                         sx={{ color: '#00D4AA' }}
                       >
                         <DirectionsIcon />

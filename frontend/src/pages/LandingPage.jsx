@@ -15,7 +15,6 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
-import InteractiveMap from '../components/InteractiveMap';
 import RouteIcon from '@mui/icons-material/Route';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import BatteryChargingFullIcon from '@mui/icons-material/BatteryChargingFull';
@@ -201,8 +200,6 @@ const LandingPage = () => {
         </Container>
       </Box>
 
-      {/* Interactive Map Section */}
-      <InteractiveMap />
 
       {/* Features Section */}
       <Box sx={{ py: 8, background: '#f9fafb' }}>

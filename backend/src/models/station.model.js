@@ -107,7 +107,19 @@ const StationSchema = new mongoose.Schema({
     availableSlots: { 
       type: Number, 
       default: function() { return this.capacity?.totalChargers || 1; }
-    }
+    },
+    // Track individual charger availability
+    chargers: [{
+      chargerId: { type: String, required: true },
+      type: { 
+        type: String,
+        enum: ['ac_type2', 'dc_ccs', 'dc_chademo', 'dc_gbt', 'ac_3pin'],
+        required: true
+      },
+      power: { type: Number, required: true },
+      isAvailable: { type: Boolean, default: true },
+      currentBooking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', default: null }
+    }]
   },
 
   // Pricing & Policies
