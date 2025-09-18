@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import corporateRoutes from './routes/corporate.routes.js';
 import franchiseOwnerRoutes from './routes/franchiseOwner.routes.js';
+import stationManagerRoutes from './routes/stationManager.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import bookingRoutes from './routes/booking.routes.js';
 // Removed deprecated corporate application routes
@@ -52,6 +53,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/corporate', corporateRoutes);
 app.use('/api/franchise-owner', franchiseOwnerRoutes);
+app.use('/api/station-manager', stationManagerRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/bookings', bookingRoutes);
 // app.use('/api/corporates', corporateApplicationRoutes); // deprecated

@@ -778,17 +778,29 @@ export const getStationManagers = async (req, res) => {
       'roleSpecificData.stationManagerInfo.franchiseId': franchiseId
     }).select('personalInfo roleSpecificData.stationManagerInfo');
 
+    // Get station details for assigned stations
+    const stationIds = managers.flatMap(m => m.roleSpecificData?.stationManagerInfo?.assignedStations || []);
+    const stations = await Station.find({ _id: { $in: stationIds } }).select('name _id');
+    const stationMap = new Map(stations.map(s => [s._id.toString(), s]));
+
     res.json({
       success: true,
-      data: managers.map(m => ({
-        id: m._id,
-        firstName: m.personalInfo.firstName,
-        lastName: m.personalInfo.lastName,
-        email: m.personalInfo.email,
-        phone: m.personalInfo.phone,
-        assignedStations: m.roleSpecificData?.stationManagerInfo?.assignedStations?.length || 0,
-        status: m.credentials?.isActive ? 'Active' : 'Inactive'
-      }))
+      data: managers.map(m => {
+        const assignedStations = m.roleSpecificData?.stationManagerInfo?.assignedStations || [];
+        const stationDetails = assignedStations.map(id => stationMap.get(id.toString())).filter(Boolean);
+        
+        return {
+          id: m._id,
+          firstName: m.personalInfo.firstName,
+          lastName: m.personalInfo.lastName,
+          email: m.personalInfo.email,
+          phone: m.personalInfo.phone,
+          assignedStations: stationDetails,
+          assignedStation: stationDetails[0]?.name || 'Unassigned',
+          stationId: stationDetails[0]?._id || null,
+          status: m.credentials?.isActive ? 'Active' : 'Inactive'
+        };
+      })
     });
   } catch (error) {
     console.error('Error getting station managers:', error);

@@ -658,8 +658,8 @@ const FranchiseOwnerDashboard = () => {
       lastName: manager.lastName || '',
       email: manager.email || '',
       phone: manager.phone || '',
-      assignedStation: manager.assignedStation || '',
-      stationId: manager.stationId || ''
+      assignedStation: manager.assignedStation || manager.assignedStations?.[0]?.name || '',
+      stationId: manager.stationId || manager.assignedStations?.[0]?.id || ''
     });
     setManagerDialog({ open: true, mode: 'edit', manager });
   };
