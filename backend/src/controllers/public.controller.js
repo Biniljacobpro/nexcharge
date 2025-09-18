@@ -18,7 +18,7 @@ export const getPublicStations = async (_req, res) => {
       lat: s.location?.coordinates?.latitude ?? 0,
       lng: s.location?.coordinates?.longitude ?? 0,
       totalChargers: s.capacity?.totalChargers ?? 0,
-      availableSlots: s.capacity?.availableSlots ?? 0,
+      availableSlots: s.capacity?.chargers?.filter(c => c.isAvailable).length || s.capacity?.availableSlots || 0,
       chargerTypes: s.capacity?.chargerTypes || [],
       availableChargers: s.capacity?.chargers?.filter(c => c.isAvailable) || [],
       maxPowerPerCharger: s.capacity?.maxPowerPerCharger ?? 0,
@@ -64,7 +64,7 @@ export const getPublicStationById = async (req, res) => {
         availableChargers: s.capacity?.chargers?.filter(c => c.isAvailable) || [],
         maxPowerPerCharger: s.capacity?.maxPowerPerCharger ?? 0,
         totalPowerCapacity: s.capacity?.totalPowerCapacity ?? 0,
-        availableSlots: s.capacity?.availableSlots ?? 0,
+        availableSlots: s.capacity?.chargers?.filter(c => c.isAvailable).length || s.capacity?.availableSlots || 0,
       },
       pricing: {
         model: s.pricing?.model || 'per_kwh',

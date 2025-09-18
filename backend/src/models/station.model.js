@@ -326,11 +326,30 @@ StationSchema.pre('save', async function(next) {
   next();
 });
 
-// Pre-save middleware to calculate total power capacity
+// Pre-save middleware to calculate total power capacity and populate chargers array
 StationSchema.pre('save', function(next) {
   if (this.capacity.totalChargers && this.capacity.maxPowerPerCharger) {
     this.capacity.totalPowerCapacity = this.capacity.totalChargers * this.capacity.maxPowerPerCharger;
   }
+  
+  // Populate chargers array if it's empty but we have charger types and total chargers
+  if (this.capacity.chargers.length === 0 && this.capacity.chargerTypes.length > 0 && this.capacity.totalChargers > 0) {
+    this.capacity.chargers = [];
+    const chargersPerType = Math.ceil(this.capacity.totalChargers / this.capacity.chargerTypes.length);
+    
+    this.capacity.chargerTypes.forEach((type, typeIndex) => {
+      for (let i = 0; i < chargersPerType && this.capacity.chargers.length < this.capacity.totalChargers; i++) {
+        this.capacity.chargers.push({
+          chargerId: `${type}_${typeIndex}_${i}`,
+          type: type,
+          power: this.capacity.maxPowerPerCharger,
+          isAvailable: true,
+          currentBooking: null
+        });
+      }
+    });
+  }
+  
   next();
 });
 

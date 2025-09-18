@@ -30,10 +30,10 @@ const StationDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [bookingDialog, setBookingDialog] = useState(false);
-  const ALL_CHARGER_TYPES = ['ac_type2', 'dc_ccs', 'dc_chademo', 'dc_gbt', 'ac_3pin'];
   
   const [bookingForm, setBookingForm] = useState({
     chargerType: '',
+    duration: '2', // Default 2 hours
     startTime: null,
     endTime: null,
     vehicleInfo: {
@@ -43,11 +43,24 @@ const StationDetails = () => {
       batteryCapacity: '',
       currentCharge: '',
       targetCharge: ''
-    },
-    notes: ''
+    }
   });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+
+  // Duration options in 30-minute increments up to 5 hours
+  const DURATION_OPTIONS = [
+    { value: '0.5', label: '30 minutes' },
+    { value: '1', label: '1 hour' },
+    { value: '1.5', label: '1 hour 30 minutes' },
+    { value: '2', label: '2 hours' },
+    { value: '2.5', label: '2 hours 30 minutes' },
+    { value: '3', label: '3 hours' },
+    { value: '3.5', label: '3 hours 30 minutes' },
+    { value: '4', label: '4 hours' },
+    { value: '4.5', label: '4 hours 30 minutes' },
+    { value: '5', label: '5 hours' }
+  ];
 
   const toLocalDateTimeValue = (date) => {
     if (!date) return '';
@@ -66,12 +79,26 @@ const StationDetails = () => {
     const start = value ? new Date(value) : null;
     let computedEnd = null;
     if (start) {
-      // Enforce future start and fixed 2-hour duration
+      // Calculate end time based on selected duration
+      const durationHours = parseFloat(bookingForm.duration);
       const startMs = start.getTime();
-      const endMs = startMs + 2 * 60 * 60 * 1000;
+      const endMs = startMs + (durationHours * 60 * 60 * 1000);
       computedEnd = new Date(endMs);
     }
     setBookingForm({ ...bookingForm, startTime: value, endTime: computedEnd ? toLocalDateTimeValue(computedEnd) : '' });
+  };
+
+  const handleDurationChange = (duration) => {
+    setBookingForm({ ...bookingForm, duration });
+    // Recalculate end time if start time is set
+    if (bookingForm.startTime) {
+      const start = new Date(bookingForm.startTime);
+      const durationHours = parseFloat(duration);
+      const startMs = start.getTime();
+      const endMs = startMs + (durationHours * 60 * 60 * 1000);
+      const computedEnd = new Date(endMs);
+      setBookingForm(prev => ({ ...prev, endTime: toLocalDateTimeValue(computedEnd) }));
+    }
   };
 
   useEffect(() => {
@@ -121,8 +148,7 @@ const StationDetails = () => {
           chargerType: bookingForm.chargerType,
           startTime: new Date(bookingForm.startTime).toISOString(),
           endTime: new Date(bookingForm.endTime).toISOString(),
-          vehicleInfo: bookingForm.vehicleInfo,
-          notes: bookingForm.notes
+          vehicleInfo: bookingForm.vehicleInfo
         })
       });
 
@@ -143,8 +169,29 @@ const StationDetails = () => {
     }
   };
 
+  // Calculate available chargers by type - if no individual chargers, use total available slots
   const getAvailableChargersByType = (type) => {
-    return station?.capacity?.availableChargers?.filter(c => c.type === type) || [];
+    const availableChargers = station?.capacity?.availableChargers || [];
+    const chargersOfType = availableChargers.filter(c => c.type === type);
+    
+    // If we have individual charger data, use it
+    if (chargersOfType.length > 0) {
+      return chargersOfType;
+    }
+    
+    // Otherwise, if the station has this charger type, assume some are available
+    const hasChargerType = station?.capacity?.chargerTypes?.includes(type);
+    if (hasChargerType && station?.capacity?.availableSlots > 0) {
+      // Return a mock array with available slots count
+      return Array.from({ length: Math.min(station.capacity.availableSlots, 5) }, (_, i) => ({
+        chargerId: `mock-${type}-${i}`,
+        type: type,
+        power: station.capacity.maxPowerPerCharger,
+        isAvailable: true
+      }));
+    }
+    
+    return [];
   };
 
   if (error || !station) {
@@ -246,7 +293,7 @@ const StationDetails = () => {
                     label="Charger Type"
                     onChange={(e) => setBookingForm({...bookingForm, chargerType: e.target.value})}
                   >
-                    {ALL_CHARGER_TYPES.map((type) => {
+                    {(station.capacity?.chargerTypes || []).map((type) => {
                       const available = getAvailableChargersByType(type);
                       const disabled = available.length === 0;
                       return (
@@ -255,6 +302,23 @@ const StationDetails = () => {
                         </MenuItem>
                       );
                     })}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Duration</InputLabel>
+                  <Select
+                    value={bookingForm.duration}
+                    label="Duration"
+                    onChange={(e) => handleDurationChange(e.target.value)}
+                  >
+                    {DURATION_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
@@ -284,10 +348,16 @@ const StationDetails = () => {
                 />
               </Grid>
               
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'text.secondary' }}>
+                  Vehicle Information (for charging optimization)
+                </Typography>
+              </Grid>
+              
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Vehicle Make"
+                  label="Vehicle Make (e.g., Tesla, BMW)"
                   value={bookingForm.vehicleInfo.make}
                   onChange={(e) => setBookingForm({
                     ...bookingForm, 
@@ -299,7 +369,7 @@ const StationDetails = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Vehicle Model"
+                  label="Vehicle Model (e.g., Model 3, iX)"
                   value={bookingForm.vehicleInfo.model}
                   onChange={(e) => setBookingForm({
                     ...bookingForm, 
@@ -324,8 +394,9 @@ const StationDetails = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Current Charge (%)"
+                  label="Current Charge Level (%)"
                   type="number"
+                  inputProps={{ min: 0, max: 100 }}
                   value={bookingForm.vehicleInfo.currentCharge}
                   onChange={(e) => setBookingForm({
                     ...bookingForm, 
@@ -337,24 +408,14 @@ const StationDetails = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Target Charge (%)"
+                  label="Target Charge Level (%)"
                   type="number"
+                  inputProps={{ min: 0, max: 100 }}
                   value={bookingForm.vehicleInfo.targetCharge}
                   onChange={(e) => setBookingForm({
                     ...bookingForm, 
                     vehicleInfo: {...bookingForm.vehicleInfo, targetCharge: e.target.value}
                   })}
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Notes (Optional)"
-                  multiline
-                  rows={3}
-                  value={bookingForm.notes}
-                  onChange={(e) => setBookingForm({...bookingForm, notes: e.target.value})}
                 />
               </Grid>
             </Grid>
