@@ -10,7 +10,8 @@ import {
   updateProfile,
   updatePassword,
   updateProfileImage,
-  uploadProfileImage
+  uploadProfileImage,
+  checkEmailAvailability
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middlewares/auth.js';
 import upload from '../middlewares/upload.js';
@@ -26,6 +27,7 @@ router.post('/google', googleSignIn);
 router.get('/me', requireAuth, me);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
+router.get('/check-email', checkEmailAvailability);
 
 // Profile management routes
 router.put('/profile', requireAuth, updateProfile);

@@ -1043,10 +1043,17 @@ const CorporateDashboard = () => {
         {/* Top Bar */}
         <AppBar position="static" elevation={0} sx={{ bgcolor: '#ffffff', borderBottom: '1px solid #e0e0e0' }}>
           <Toolbar>
-            <Typography variant="h6" sx={{ flexGrow: 1, color: 'text.primary' }}>
-              {currentSection?.label}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mr: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', flexGrow: 1, gap: 2 }}>
+              <Typography variant="h6" sx={{ color: 'text.primary' }}>
+                {currentSection?.label}
+              </Typography>
+              {user && (
+                <Typography variant="subtitle1" sx={{ color: 'text.secondary' }}>
+                  Welcome, <strong>{user.firstName}</strong>
+                </Typography>
+              )}
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mr: 2, display: { xs: 'none', md: 'block' } }}>
               {currentSection?.description}
             </Typography>
             

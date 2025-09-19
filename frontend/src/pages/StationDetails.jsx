@@ -21,6 +21,10 @@ import {
   Alert,
   Snackbar
 } from '@mui/material';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
+import AnimatedBackground from '../components/AnimatedBackground';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
  
 
 const StationDetails = () => {
@@ -120,8 +124,12 @@ const StationDetails = () => {
 
   if (loading) {
     return (
-      <Box sx={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress />
+      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
+        <AnimatedBackground />
+        <Navbar />
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <CircularProgress />
+        </Box>
       </Box>
     );
   }
@@ -196,31 +204,36 @@ const StationDetails = () => {
 
   if (error || !station) {
     return (
-      <Container maxWidth="md" sx={{ py: 6 }}>
-        <Typography color="error" sx={{ mb: 2 }}>{error || 'Station not found'}</Typography>
-        <Button variant="outlined" onClick={() => navigate(-1)}>Go back</Button>
-      </Container>
+      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
+        <AnimatedBackground />
+        <Navbar />
+        <Container maxWidth="md" sx={{ py: 6 }}>
+          <Typography color="error" sx={{ mb: 2 }}>{error || 'Station not found'}</Typography>
+          <Button variant="outlined" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />}>Back</Button>
+        </Container>
+        <Footer />
+      </Box>
     );
   }
 
   return (
-      <Container maxWidth="lg" sx={{ py: 6 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>{station.name}</Typography>
-            <Typography variant="body1" color="text.secondary">
-              {station.address}, {station.city}, {station.state} {station.pincode}
-            </Typography>
+      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
+        <AnimatedBackground />
+        <Navbar />
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Button variant="text" color="inherit" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />}>
+              Back
+            </Button>
           </Box>
-          <Button 
-            variant="contained" 
-            size="large"
-            onClick={() => setBookingDialog(true)}
-            disabled={station.capacity?.availableSlots === 0}
-          >
-            Book Now
-          </Button>
-        </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>{station.name}</Typography>
+              <Typography variant="body1" color="text.secondary">
+                {station.address}, {station.city}, {station.state} {station.pincode}
+              </Typography>
+            </Box>
+          </Box>
 
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
@@ -279,6 +292,17 @@ const StationDetails = () => {
             </Paper>
           </Grid>
         </Grid>
+
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+          <Button 
+            variant="contained" 
+            size="large"
+            onClick={() => setBookingDialog(true)}
+            disabled={station.capacity?.availableSlots === 0}
+          >
+            Book Now
+          </Button>
+        </Box>
 
         {/* Booking Dialog */}
         <Dialog open={bookingDialog} onClose={() => setBookingDialog(false)} maxWidth="md" fullWidth>
@@ -445,7 +469,9 @@ const StationDetails = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
-      </Container>
+        </Container>
+        <Footer />
+      </Box>
   );
 };
 

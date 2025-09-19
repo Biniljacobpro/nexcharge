@@ -36,7 +36,11 @@ const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
 app.use(cors({ origin: corsOrigin, credentials: true }));
 
 // Security & utils
-app.use(helmet());
+app.use(helmet({
+ // Allow cross-origin loading of static assets like images from the backend
+ // This prevents ERR_BLOCKED_BY_RESPONSE.NotSameOrigin caused by CORP
+ crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

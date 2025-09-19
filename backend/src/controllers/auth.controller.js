@@ -126,6 +126,25 @@ export const logout = async (_req, res) => {
 	return res.json({ ok: true });
 };
 
+// Email availability check
+export const checkEmailAvailability = async (req, res) => {
+  try {
+    const rawEmail = (req.query.email || '').toString().trim().toLowerCase();
+    if (!rawEmail) return res.status(400).json({ error: 'Email is required' });
+
+    // Basic RFC 5322-like email check (simplified)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(rawEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    const existing = await User.findOne({ 'personalInfo.email': rawEmail }).select('_id');
+    return res.json({ available: !existing });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to check email' });
+  }
+};
+
 export const updateProfile = async (req, res) => {
   try {
     const { firstName, lastName, phone, address } = req.body;

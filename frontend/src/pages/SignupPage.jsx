@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Container,
@@ -23,7 +23,7 @@ import { Visibility, VisibilityOff } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
-import { signupApi } from '../utils/api';
+import { signupApi, checkEmailAvailabilityApi } from '../utils/api';
 import SocialAuthRow from '../components/SocialAuthRow';
 import Link from '@mui/material/Link';
 
@@ -39,26 +39,63 @@ const SignupPage = () => {
     newsletter: true,
   });
   const [errors, setErrors] = useState({});
+  const [emailChecking, setEmailChecking] = useState(false);
+  const debounceTimerRef = useRef(null);
+  const allowedDomains = useMemo(() => ['gmail.com', 'mca.ajce.in'], []);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const emailFormatValid = useMemo(() => {
+    const email = formData.email.trim().toLowerCase();
+    if (!email) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return emailRegex.test(email);
+  }, [formData.email]);
+
+  const emailDomainValid = useMemo(() => {
+    const email = formData.email.trim().toLowerCase();
+    const parts = email.split('@');
+    if (parts.length !== 2) return false;
+    return allowedDomains.includes(parts[1]);
+  }, [formData.email, allowedDomains]);
+
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
+    const nameRegex = /^[A-Za-z]+$/;
 
+    // First name: required, letters only, no spaces
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    } else if (!nameRegex.test(formData.firstName)) {
+      newErrors.firstName = 'Letters only, no spaces';
+    }
+
+    // Last name: required, letters only, no spaces
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
+    } else if (!nameRegex.test(formData.lastName)) {
+      newErrors.lastName = 'Letters only, no spaces';
+    }
+
+    // Email: required, format, and allowed domain check
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+    } else if (!emailFormatValid) {
+      newErrors.email = 'Invalid email format';
+    } else if (!emailDomainValid) {
+      newErrors.email = 'Enter a valid email domain';
     }
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'At least 6 characters';
+    } else if (!/\d/.test(formData.password)) {
+      newErrors.password = 'Include at least one number';
+    } else if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>\/?`~]/.test(formData.password)) {
+      newErrors.password = 'Include at least one special character';
     }
 
     if (!formData.confirmPassword) {
@@ -72,12 +109,97 @@ const SignupPage = () => {
   };
 
   const handleInputChange = (field) => (event) => {
-    setFormData({
-      ...formData,
-      [field]: field === 'newsletter' ? event.target.checked : event.target.value,
+    const value = field === 'newsletter' ? event.target.checked : event.target.value;
+    const updated = { ...formData, [field]: value };
+    setFormData(updated);
+
+    // Live validation per field
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (field === 'firstName') {
+        const nameRegex = /^[A-Za-z]+$/;
+        if (!updated.firstName.trim()) next.firstName = 'First name is required';
+        else if (!nameRegex.test(updated.firstName)) next.firstName = 'Letters only, no spaces';
+        else next.firstName = '';
+      }
+      if (field === 'lastName') {
+        const nameRegex = /^[A-Za-z]+$/;
+        if (!updated.lastName.trim()) next.lastName = 'Last name is required';
+        else if (!nameRegex.test(updated.lastName)) next.lastName = 'Letters only, no spaces';
+        else next.lastName = '';
+      }
+      if (field === 'password') {
+        if (!updated.password) next.password = 'Password is required';
+        else if (updated.password.length < 6) next.password = 'At least 6 characters';
+        else if (!/\d/.test(updated.password)) next.password = 'Include at least one number';
+        else if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>\/?`~]/.test(updated.password)) next.password = 'Include at least one special character';
+        else next.password = '';
+        // Also update confirm match on password change
+        if (updated.confirmPassword && updated.confirmPassword !== updated.password) {
+          next.confirmPassword = 'Passwords do not match';
+        } else if (updated.confirmPassword) {
+          next.confirmPassword = '';
+        }
+      }
+      if (field === 'confirmPassword') {
+        if (!updated.confirmPassword) next.confirmPassword = 'Confirm your password';
+        else if (updated.confirmPassword !== updated.password) next.confirmPassword = 'Passwords do not match';
+        else next.confirmPassword = '';
+      }
+      if (field === 'email') {
+        const email = updated.email.trim().toLowerCase();
+        if (!email) next.email = 'Email is required';
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) next.email = 'Invalid email format';
+        else if (!allowedDomains.includes(email.split('@')[1] || '')) next.email = 'Enter a valid email domain';
+        else next.email = '';
+      }
+      return next;
     });
-    if (errors[field]) {
-      setErrors({ ...errors, [field]: '' });
+  };
+
+  // Real-time email availability check with debounce
+  useEffect(() => {
+    if (!formData.email) {
+      return;
+    }
+    if (!emailFormatValid) {
+      setErrors((prev) => ({ ...prev, email: 'Invalid email format' }));
+      return;
+    }
+    if (!emailDomainValid) {
+      setErrors((prev) => ({ ...prev, email: 'Enter a valid email domain' }));
+      return;
+    }
+    setErrors((prev) => ({ ...prev, email: '' }));
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        setEmailChecking(true);
+        const { available } = await checkEmailAvailabilityApi(formData.email.trim());
+        if (!available) {
+          setErrors((prev) => ({ ...prev, email: 'Email already in use' }));
+        }
+      } catch (e) {
+        setErrors((prev) => ({ ...prev, email: e.message || 'Failed to validate email' }));
+      } finally {
+        setEmailChecking(false);
+      }
+    }, 400);
+    return () => debounceTimerRef.current && clearTimeout(debounceTimerRef.current);
+  }, [formData.email, emailFormatValid]);
+
+  const handleEmailBlur = async () => {
+    if (!formData.email || !emailFormatValid) return;
+    try {
+      setEmailChecking(true);
+      const { available } = await checkEmailAvailabilityApi(formData.email.trim());
+      if (!available) {
+        setErrors((prev) => ({ ...prev, email: 'Email already in use' }));
+      }
+    } catch (e) {
+      setErrors((prev) => ({ ...prev, email: e.message || 'Failed to validate email' }));
+    } finally {
+      setEmailChecking(false);
     }
   };
 
@@ -175,8 +297,9 @@ const SignupPage = () => {
                             fullWidth
                             value={formData.email}
                             onChange={handleInputChange('email')}
+                            onBlur={handleEmailBlur}
                             error={!!errors.email}
-                            helperText={errors.email}
+                            helperText={errors.email || (emailChecking ? 'Checking email…' : '')}
                           />
                         </Grid>
                         <Grid item xs={12}>

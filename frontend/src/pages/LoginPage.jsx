@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box,
   Container,
@@ -39,13 +39,29 @@ const LoginPage = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const allowedDomains = useMemo(() => ['gmail.com', 'mca.ajce.in'], []);
+  const emailFormatValid = useMemo(() => {
+    const email = formData.email.trim().toLowerCase();
+    if (!email) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return emailRegex.test(email);
+  }, [formData.email]);
+  const emailDomainValid = useMemo(() => {
+    const email = formData.email.trim().toLowerCase();
+    const parts = email.split('@');
+    if (parts.length !== 2) return false;
+    return allowedDomains.includes(parts[1]);
+  }, [formData.email, allowedDomains]);
+
   const validateForm = () => {
     const newErrors = {};
 
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+    } else if (!emailFormatValid) {
+      newErrors.email = 'Invalid email format';
+    } else if (!emailDomainValid) {
+      newErrors.email = 'Enter a valid email domain';
     }
 
     if (!formData.password) {
@@ -57,13 +73,26 @@ const LoginPage = () => {
   };
 
   const handleInputChange = (field) => (event) => {
-    setFormData({
-      ...formData,
-      [field]: field === 'remember' ? event.target.checked : event.target.value,
+    const value = field === 'remember' ? event.target.checked : event.target.value;
+    const updated = { ...formData, [field]: value };
+    setFormData(updated);
+
+    // Live validation as user types
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (field === 'email') {
+        const email = updated.email.trim().toLowerCase();
+        if (!email) next.email = 'Email is required';
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) next.email = 'Invalid email format';
+        else if (!allowedDomains.includes((email.split('@')[1] || ''))) next.email = 'Enter a valid email domain';
+        else next.email = '';
+      }
+      if (field === 'password') {
+        if (!updated.password) next.password = 'Password is required';
+        else next.password = '';
+      }
+      return next;
     });
-    if (errors[field]) {
-      setErrors({ ...errors, [field]: '' });
-    }
   };
 
   const handleSubmit = async (event) => {
@@ -178,13 +207,7 @@ const LoginPage = () => {
                           </Typography>
                         </Grid>
                         <Grid item xs={12}>
-                          <FormControlLabel
-                            control={<Checkbox checked={formData.remember} onChange={handleInputChange('remember')} />}
-                            label="Remember me"
-                          />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Button type="submit" variant="contained" fullWidth sx={{ py: 1.25 }}>
+                          <Button type="submit" variant="contained" fullWidth sx={{ py: 1.25, mt: 2 }}>
                             Sign In
                           </Button>
                         </Grid>
