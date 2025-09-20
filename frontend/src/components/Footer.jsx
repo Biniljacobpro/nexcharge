@@ -7,10 +7,10 @@ const Footer = () => {
     <Box
       component="footer"
       sx={{
-        py: 4,
+        py: 6,
         mt: 'auto',
-        background: '#f9fafb',
-        borderTop: '1px solid #f3f4f6',
+        background: 'linear-gradient(135deg, #F8F8F8 0%, #ffffff 100%)',
+        borderTop: '1px solid #EAEAEA',
       }}
     >
       <Container maxWidth="lg">
@@ -25,31 +25,37 @@ const Footer = () => {
               flexDirection: { xs: 'column', sm: 'row' },
               justifyContent: 'space-between',
               alignItems: 'center',
-              gap: 2,
+              gap: 3,
             }}
           >
             <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ textAlign: { xs: 'center', sm: 'left' } }}
+              variant="body1"
+              sx={{ 
+                textAlign: { xs: 'center', sm: 'left' },
+                color: '#6B7280',
+                fontWeight: 500,
+              }}
             >
               © NexCharge 2025. All rights reserved.
             </Typography>
             <Box
               sx={{
                 display: 'flex',
-                gap: 3,
+                gap: 4,
                 flexDirection: { xs: 'column', sm: 'row' },
                 alignItems: 'center',
               }}
             >
               <Link
                 href="#"
-                color="text.secondary"
-                underline="hover"
                 sx={{
+                  color: '#6B7280',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                  transition: 'all 0.3s ease',
                   '&:hover': {
-                    color: 'primary.main',
+                    color: '#00E6B6',
+                    textDecoration: 'underline',
                   },
                 }}
               >
@@ -57,11 +63,14 @@ const Footer = () => {
               </Link>
               <Link
                 href="#"
-                color="text.secondary"
-                underline="hover"
                 sx={{
+                  color: '#6B7280',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                  transition: 'all 0.3s ease',
                   '&:hover': {
-                    color: 'primary.main',
+                    color: '#00E6B6',
+                    textDecoration: 'underline',
                   },
                 }}
               >

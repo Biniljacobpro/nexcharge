@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Email, Lock, Person } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
@@ -234,142 +234,336 @@ const SignupPage = () => {
       <AnimatedBackground />
       <Navbar />
 
-      <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', py: { xs: 4, md: 8 } }}>
+      <Box component="main" sx={{ 
+        flex: 1, 
+        display: 'flex', 
+        alignItems: 'center', 
+        py: { xs: 6, md: 10 },
+        background: 'linear-gradient(135deg, #F8F8F8 0%, #ffffff 50%, #F8F8F8 100%)',
+      }}>
         <Container maxWidth="lg">
-          <Grid container spacing={6} alignItems="center">
-            {/* Left: Headline */}
+          <Grid container spacing={8} alignItems="center">
+            {/* Left: Branding Visual */}
             <Grid item xs={12} md={6}>
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
-                <Typography variant="h2" sx={{ color: '#1f2937', fontWeight: 700, mb: 2 }}>
-                  The best offer
-                </Typography>
-                <Typography variant="h2" sx={{ color: theme.palette.secondary.dark, fontWeight: 700, mb: 2 }}>
-                  for your
-                </Typography>
-                <Typography variant="h2" sx={{ color: theme.palette.secondary.dark, fontWeight: 700, mb: 3 }}>
-                  business
-                </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 560 }}>
-                  Power your business with NexCharge — onboard customers faster, manage charging seamlessly, and unlock
-                  real-time insights for stations, pricing, and performance.Also for the ev drivers, find nearby chargers, reserve slots, and power your journey with clean, reliable, and sustainable energy — all in one simple platform.
-                </Typography>
+              <motion.div 
+                initial={{ opacity: 0, x: -30 }} 
+                animate={{ opacity: 1, x: 0 }} 
+                transition={{ duration: 0.8 }}
+              >
+                <Box sx={{ position: 'relative' }}>
+                  {/* Background decorative elements */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: -50,
+                      right: -30,
+                      width: 200,
+                      height: 200,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, rgba(0, 230, 182, 0.1) 0%, rgba(45, 90, 135, 0.1) 100%)',
+                      animation: 'float 8s ease-in-out infinite',
+                      '@keyframes float': {
+                        '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+                        '50%': { transform: 'translateY(-30px) rotate(180deg)' },
+                      },
+                    }}
+                  />
+                  
+                  <Typography 
+                    variant="h1" 
+                    sx={{ 
+                      color: '#222222', 
+                      fontWeight: 800, 
+                      mb: 3,
+                      fontSize: { xs: '2.5rem', md: '3.5rem' },
+                      lineHeight: 1.1,
+                      letterSpacing: '-0.02em',
+                    }}
+                  >
+                    The Best{' '}
+                    <Box
+                      component="span"
+                      sx={{
+                        background: 'linear-gradient(135deg, #00E6B6 0%, #00B894 100%)',
+                        backgroundClip: 'text',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        fontWeight: 800,
+                      }}
+                    >
+                      Offer
+                    </Box>
+                  </Typography>
+                  
+                  <Typography 
+                    variant="h2" 
+                    sx={{ 
+                      color: '#2D5A87', 
+                      fontWeight: 700, 
+                      mb: 2,
+                      fontSize: { xs: '2rem', md: '2.5rem' },
+                    }}
+                  >
+                    For Your
+                  </Typography>
+                  
+                  <Typography 
+                    variant="h2" 
+                    sx={{ 
+                      color: '#2D5A87', 
+                      fontWeight: 700, 
+                      mb: 4,
+                      fontSize: { xs: '2rem', md: '2.5rem' },
+                    }}
+                  >
+                    Business
+                  </Typography>
+                  
+                  <Typography 
+                    variant="h5" 
+                    sx={{ 
+                      maxWidth: 600,
+                      color: '#6B7280',
+                      lineHeight: 1.7,
+                      fontWeight: 400,
+                      fontSize: { xs: '1.1rem', md: '1.25rem' },
+                    }}
+                  >
+                    Power your business with NexCharge — onboard customers faster, manage charging seamlessly, and unlock
+                    real-time insights for stations, pricing, and performance. Also for EV drivers, find nearby chargers, reserve slots, and power your journey with clean, reliable, and sustainable energy — all in one simple platform.
+                  </Typography>
+                </Box>
               </motion.div>
             </Grid>
 
-            {/* Right: Form Card */}
+            {/* Right: Compact Professional Form */}
             <Grid item xs={12} md={6}>
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-                <Card sx={{ p: { xs: 2, sm: 3 }, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
-                  <CardContent>
-                    {showSuccess && (
-                      <Alert severity="success" sx={{ mb: 2 }}>
-                        Account created successfully! Redirecting...
-                      </Alert>
-                    )}
+              <motion.div 
+                initial={{ opacity: 0, y: 30 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                transition={{ duration: 0.8, delay: 0.2 }}
+              >
+                <Box sx={{ 
+                  maxWidth: 400, 
+                  mx: 'auto',
+                  width: '100%',
+                }}>
+                  <Card sx={{ 
+                    p: 3, 
+                    borderRadius: 3,
+                    background: '#ffffff',
+                    border: '1px solid #EAEAEA',
+                    boxShadow: '0 8px 30px rgba(0, 0, 0, 0.06)',
+                  }}>
+                    <CardContent sx={{ p: 0 }}>
+                      {showSuccess && (
+                        <Alert 
+                          severity="success" 
+                          sx={{ 
+                            mb: 2,
+                            borderRadius: 2,
+                            fontSize: '0.9rem',
+                          }}
+                        >
+                          Account created successfully! Redirecting...
+                        </Alert>
+                      )}
 
-                    {/* Email/password form */}
-                    <Box component="form" onSubmit={handleSubmit}>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                      <Typography 
+                        variant="h5" 
+                        sx={{ 
+                          mb: 3, 
+                          textAlign: 'center',
+                          color: '#222222',
+                          fontWeight: 700,
+                        }}
+                      >
+                        Create Your Account
+                      </Typography>
+
+                      <Box 
+                        component="form" 
+                        onSubmit={handleSubmit}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSubmit(e);
+                          }
+                        }}
+                      >
+                        <Stack spacing={2}>
+                          {/* Single column layout for names */}
                           <TextField
                             label="First name"
                             fullWidth
+                            placeholder="Enter your first name"
                             value={formData.firstName}
                             onChange={handleInputChange('firstName')}
                             error={!!errors.firstName}
                             helperText={errors.firstName}
+                            InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <Person sx={{ color: '#9CA3AF', fontSize: '1.2rem' }} />
+                                </InputAdornment>
+                              ),
+                            }}
                           />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
+                          
                           <TextField
                             label="Last name"
                             fullWidth
+                            placeholder="Enter your last name"
                             value={formData.lastName}
                             onChange={handleInputChange('lastName')}
                             error={!!errors.lastName}
                             helperText={errors.lastName}
+                            InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <Person sx={{ color: '#9CA3AF', fontSize: '1.2rem' }} />
+                                </InputAdornment>
+                              ),
+                            }}
                           />
-                        </Grid>
-                        <Grid item xs={12}>
+                          
                           <TextField
                             label="Email address"
                             type="email"
                             fullWidth
+                            placeholder="Enter your email"
                             value={formData.email}
                             onChange={handleInputChange('email')}
                             onBlur={handleEmailBlur}
                             error={!!errors.email}
                             helperText={errors.email || (emailChecking ? 'Checking email…' : '')}
+                            InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <Email sx={{ color: '#9CA3AF', fontSize: '1.2rem' }} />
+                                </InputAdornment>
+                              ),
+                            }}
                           />
-                        </Grid>
-                        <Grid item xs={12}>
+                          
                           <TextField
                             label="Password"
                             type={showPassword ? 'text' : 'password'}
                             fullWidth
+                            placeholder="Enter your password"
                             value={formData.password}
                             onChange={handleInputChange('password')}
                             error={!!errors.password}
                             helperText={errors.password}
                             InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <Lock sx={{ color: '#9CA3AF', fontSize: '1.2rem' }} />
+                                </InputAdornment>
+                              ),
                               endAdornment: (
                                 <InputAdornment position="end">
-                                  <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: 'text.secondary' }}>
+                                  <IconButton 
+                                    onClick={() => setShowPassword(!showPassword)} 
+                                    edge="end" 
+                                    sx={{ color: '#6B7280' }}
+                                    size="small"
+                                  >
                                     {showPassword ? <VisibilityOff /> : <Visibility />}
                                   </IconButton>
                                 </InputAdornment>
                               ),
                             }}
                           />
-                        </Grid>
-                        <Grid item xs={12}>
+                          
                           <TextField
                             label="Confirm password"
                             type={showConfirmPassword ? 'text' : 'password'}
                             fullWidth
+                            placeholder="Confirm your password"
                             value={formData.confirmPassword}
                             onChange={handleInputChange('confirmPassword')}
                             error={!!errors.confirmPassword}
                             helperText={errors.confirmPassword}
                             InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <Lock sx={{ color: '#9CA3AF', fontSize: '1.2rem' }} />
+                                </InputAdornment>
+                              ),
                               endAdornment: (
                                 <InputAdornment position="end">
-                                  <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" sx={{ color: 'text.secondary' }}>
+                                  <IconButton 
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)} 
+                                    edge="end" 
+                                    sx={{ color: '#6B7280' }}
+                                    size="small"
+                                  >
                                     {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                                   </IconButton>
                                 </InputAdornment>
                               ),
                             }}
                           />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Button type="submit" variant="contained" fullWidth sx={{ py: 1.25 }}>
+                          
+                          <Button 
+                            type="submit" 
+                            variant="contained" 
+                            fullWidth 
+                            sx={{ 
+                              py: 1.5,
+                              mt: 1,
+                              fontSize: '1rem',
+                              fontWeight: 600,
+                              borderRadius: 2,
+                              background: 'linear-gradient(135deg, #00E6B6 0%, #00B894 100%)',
+                              boxShadow: '0 4px 15px rgba(0, 230, 182, 0.3)',
+                              '&:hover': {
+                                background: 'linear-gradient(135deg, #00B894 0%, #00A085 100%)',
+                                transform: 'translateY(-1px)',
+                                boxShadow: '0 6px 20px rgba(0, 230, 182, 0.4)',
+                              },
+                            }}
+                          >
                             Sign Up
                           </Button>
-                        </Grid>
-                      </Grid>
-                    </Box>
+                        </Stack>
+                      </Box>
 
-                    {/* Divider and Social row */}
-                    <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center" sx={{ my: 2 }}>
-                      <Divider flexItem />
-                      <Typography variant="body2" color="text.secondary">
-                        or continue with
-                      </Typography>
-                      <Divider flexItem />
-                    </Stack>
-                    <SocialAuthRow onGoogleSuccess={(data) => navigate(data?.user?.role === 'admin' ? '/admin' : '/home')} />
+                      <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center" sx={{ my: 3 }}>
+                        <Divider flexItem sx={{ borderColor: '#EAEAEA' }} />
+                        <Typography variant="body2" sx={{ color: '#6B7280', fontWeight: 500, fontSize: '0.9rem' }}>
+                          or continue with
+                        </Typography>
+                        <Divider flexItem sx={{ borderColor: '#EAEAEA' }} />
+                      </Stack>
 
-                    <Stack alignItems="center" sx={{ mt: 3 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Already have an account?{' '}
-                        <Link component="button" variant="body2" underline="hover" onClick={() => navigate('/login')} sx={{ cursor: 'pointer' }}>
-                          Login
-                        </Link>
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
+                      <SocialAuthRow onGoogleSuccess={(data) => navigate(data?.user?.role === 'admin' ? '/admin' : '/home')} />
+
+                      <Stack alignItems="center" sx={{ mt: 3 }}>
+                        <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '0.9rem' }}>
+                          Already have an account?{' '}
+                          <Link 
+                            component="button" 
+                            variant="body2" 
+                            onClick={() => navigate('/login')} 
+                            sx={{ 
+                              cursor: 'pointer',
+                              color: '#00E6B6',
+                              fontWeight: 600,
+                              textDecoration: 'none',
+                              '&:hover': {
+                                textDecoration: 'underline',
+                              },
+                            }}
+                          >
+                            Login
+                          </Link>
+                        </Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Box>
               </motion.div>
             </Grid>
           </Grid>

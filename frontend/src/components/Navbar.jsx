@@ -23,11 +23,12 @@ const Navbar = () => {
       elevation={0}
       sx={{
         background: '#ffffff',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        borderBottom: '1px solid #f3f4f6',
+        boxShadow: '0 2px 20px rgba(0, 0, 0, 0.08)',
+        borderBottom: '1px solid #EAEAEA',
+        backdropFilter: 'blur(20px)',
       }}
     >
-      <Toolbar sx={{ justifyContent: 'space-between', py: 1 }}>
+      <Toolbar sx={{ justifyContent: 'space-between', py: 2 }}>
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -38,6 +39,10 @@ const Navbar = () => {
               display: 'flex',
               alignItems: 'center',
               cursor: 'pointer',
+              transition: 'transform 0.2s ease',
+              '&:hover': {
+                transform: 'scale(1.02)',
+              },
             }}
             onClick={() => navigate('/')}
           >
@@ -45,7 +50,7 @@ const Navbar = () => {
               src={nexchargeLogo}
               alt="NexCharge"
               style={{
-                height: '52px',
+                height: '56px',
                 width: 'auto',
               }}
             />
@@ -57,18 +62,26 @@ const Navbar = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 3 }}>
             <Button
               variant="outlined"
               onClick={() => navigate('/login')}
               sx={{
-                minWidth: isMobile ? 60 : 80,
+                minWidth: isMobile ? 80 : 100,
                 fontSize: isMobile ? '0.875rem' : '1rem',
-                borderColor: '#00D4AA',
-                color: '#00D4AA',
+                fontWeight: 600,
+                borderRadius: 3,
+                borderColor: '#00E6B6',
+                color: '#00E6B6',
+                borderWidth: '2px',
+                px: 3,
+                py: 1,
+                transition: 'all 0.3s ease',
                 '&:hover': {
-                  backgroundColor: 'rgba(0, 212, 170, 0.05)',
-                  borderColor: '#009B7A',
+                  backgroundColor: 'rgba(0, 230, 182, 0.08)',
+                  borderColor: '#00B894',
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 4px 15px rgba(0, 230, 182, 0.2)',
                 },
               }}
             >
@@ -78,11 +91,19 @@ const Navbar = () => {
               variant="contained"
               onClick={() => navigate('/signup')}
               sx={{
-                minWidth: isMobile ? 60 : 80,
+                minWidth: isMobile ? 80 : 100,
                 fontSize: isMobile ? '0.875rem' : '1rem',
-                background: '#00D4AA',
+                fontWeight: 600,
+                borderRadius: 3,
+                px: 3,
+                py: 1,
+                background: 'linear-gradient(135deg, #00E6B6 0%, #00B894 100%)',
+                boxShadow: '0 4px 15px rgba(0, 230, 182, 0.3)',
+                transition: 'all 0.3s ease',
                 '&:hover': {
-                  background: '#009B7A',
+                  background: 'linear-gradient(135deg, #00B894 0%, #00A085 100%)',
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 6px 20px rgba(0, 230, 182, 0.4)',
                 },
               }}
             >
