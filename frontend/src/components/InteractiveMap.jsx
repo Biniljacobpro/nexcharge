@@ -52,6 +52,12 @@ const InteractiveMap = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [mapError, setMapError] = useState('');
 
+  // Handle station navigation
+  const handleStationNavigation = useRef((event) => {
+    const stationId = event.detail;
+    navigate(`/station/${stationId}`);
+  });
+
   useEffect(() => {
     // Get current location
     if (navigator.geolocation) {
@@ -116,17 +122,17 @@ const InteractiveMap = () => {
           .then(async (res) => {
             if (!res.ok) throw new Error(`Failed to load stations: ${res.status}`);
             const body = await res.json();
-            const stations = (body?.data || []).map((s) => ({
-              id: s.id,
-              name: s.name,
-              lat: s.lat,
-              lng: s.lng,
-              type: (Array.isArray(s.chargerTypes) && s.chargerTypes.length > 0) ? s.chargerTypes[0] : 'Various',
-              available: s.availableSlots ?? 0,
-              total: s.totalChargers ?? 0,
-              price: s.basePrice ?? 0,
+            const stations = (body?.data || []).map((s, index) => ({
+              id: s.id || s._id || `station-${index}`,
+              name: s.name || 'Unknown Station',
+              lat: s.location?.coordinates?.latitude || s.lat || 0,
+              lng: s.location?.coordinates?.longitude || s.lng || 0,
+              type: (Array.isArray(s.capacity?.chargerTypes) && s.capacity.chargerTypes.length > 0) ? s.capacity.chargerTypes[0] : 'Various',
+              available: s.availableSlots ?? s.capacity?.availableSlots ?? 0,
+              total: s.capacity?.totalChargers ?? 0,
+              price: s.pricing?.basePrice ?? 0,
               rating: 4.5,
-              amenities: []
+              amenities: s.amenities || []
             }));
 
             setNearbyStations(stations);
@@ -155,6 +161,22 @@ const InteractiveMap = () => {
                     <p style="margin: 4px 0; color: #6b7280;">
                       <strong>Price:</strong> ₹${station.price}/kWh
                     </p>
+                    <button
+                      onclick="window.dispatchEvent(new CustomEvent('navigateToStation', { detail: '${station.id}' }))"
+                      style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 500;
+                        margin-top: 8px;
+                        width: 100%;
+                      "
+                    >
+                      View Details
+                    </button>
                   </div>
                 `);
 
@@ -211,6 +233,9 @@ const InteractiveMap = () => {
           });
         }); */
 
+        // Add event listener for station navigation
+        window.addEventListener('navigateToStation', handleStationNavigation.current);
+
         setMap(newMap);
         setIsLoading(false);
       } catch (error) {
@@ -224,6 +249,8 @@ const InteractiveMap = () => {
       if (map) {
         map.remove();
       }
+      // Clean up event listener
+      window.removeEventListener('navigateToStation', handleStationNavigation.current);
     };
   }, [currentLocation, map]);
 
@@ -431,7 +458,7 @@ const InteractiveMap = () => {
             >
               {filteredStations.map((station, index) => (
                 <motion.div
-                  key={station.id}
+                  key={station.id || `station-${index}`}
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
@@ -507,7 +534,7 @@ const InteractiveMap = () => {
                       color="text.secondary"
                       sx={{ fontSize: '0.875rem', mb: 2 }}
                     >
-                      ⭐ {station.rating}/5 • {station.amenities.join(', ')}
+                      ⭐ {station.rating}/5 • {(station.amenities && station.amenities.length > 0) ? station.amenities.join(', ') : 'No amenities listed'}
                     </Typography>
                     
                     <Typography

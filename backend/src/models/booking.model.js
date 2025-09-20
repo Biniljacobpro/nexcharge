@@ -39,13 +39,22 @@ const BookingSchema = new mongoose.Schema({
   },
   
   // Vehicle information
-  vehicleInfo: {
-    make: String,
-    model: String,
-    year: Number,
-    batteryCapacity: Number, // kWh
-    currentCharge: Number, // percentage
-    targetCharge: Number // percentage
+  vehicleId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Vehicle',
+    required: true
+  },
+  currentCharge: {
+    type: Number,
+    min: 0,
+    max: 100,
+    required: true
+  },
+  targetCharge: {
+    type: Number,
+    min: 0,
+    max: 100,
+    required: true
   },
   
   // Pricing and payment

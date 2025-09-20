@@ -11,15 +11,17 @@ export const createBooking = async (req, res) => {
       chargerType,
       startTime,
       endTime,
-      vehicleInfo,
+      vehicleId,
+      currentCharge,
+      targetCharge,
       notes
     } = req.body;
 
     // Validate required fields
-    if (!stationId || !chargerType || !startTime || !endTime) {
+    if (!stationId || !chargerType || !startTime || !endTime || !vehicleId || !currentCharge || !targetCharge) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: stationId, chargerType, startTime, endTime'
+        message: 'Missing required fields: stationId, chargerType, startTime, endTime, vehicleId, currentCharge, targetCharge'
       });
     }
 
@@ -37,6 +39,31 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Station is not available for booking'
+      });
+    }
+
+    // Check if vehicle exists and is active
+    const Vehicle = (await import('../models/vehicle.model.js')).default;
+    const vehicle = await Vehicle.findById(vehicleId);
+    if (!vehicle || !vehicle.isActive) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vehicle not found or not available'
+      });
+    }
+
+    // Validate charge levels
+    if (currentCharge < 0 || currentCharge > 100 || targetCharge < 0 || targetCharge > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Charge levels must be between 0 and 100'
+      });
+    }
+
+    if (currentCharge >= targetCharge) {
+      return res.status(400).json({
+        success: false,
+        message: 'Target charge must be higher than current charge'
       });
     }
 
@@ -93,8 +120,8 @@ export const createBooking = async (req, res) => {
 
     // Calculate duration and pricing
     const duration = Math.round((end - start) / (1000 * 60)); // minutes
-    const estimatedEnergy = vehicleInfo?.batteryCapacity ? 
-      (vehicleInfo.batteryCapacity * (vehicleInfo.targetCharge - vehicleInfo.currentCharge) / 100) : 0;
+    const estimatedEnergy = vehicle.batteryCapacity ? 
+      (vehicle.batteryCapacity * (targetCharge - currentCharge) / 100) : 0;
     const estimatedCost = estimatedEnergy * (station.pricing?.basePrice || 0);
 
     // Create booking
@@ -106,7 +133,9 @@ export const createBooking = async (req, res) => {
       startTime: start,
       endTime: end,
       duration,
-      vehicleInfo,
+      vehicleId,
+      currentCharge,
+      targetCharge,
       pricing: {
         basePrice: station.pricing?.basePrice || 0,
         estimatedEnergy,
@@ -158,6 +187,7 @@ export const getUserBookings = async (req, res) => {
 
     const bookings = await Booking.find(query)
       .populate('stationId', 'name location')
+      .populate('vehicleId', 'make model vehicleType batteryCapacity specifications')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);

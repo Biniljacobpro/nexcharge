@@ -39,7 +39,8 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Menu
+  Menu,
+  Autocomplete
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -69,7 +70,8 @@ import {
   Folder as FolderIcon,
   Flag as FlagIcon,
   Refresh as RefreshIcon,
-  MoreVert as MoreVertIcon
+  MoreVert as MoreVertIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import nexchargeLogo from '../assets/nexcharge-high-resolution-logo-transparent.png';
@@ -577,9 +579,48 @@ const AdminDashboard = () => {
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
   const [corporateAdmins, setCorporateAdmins] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [vehicleLoading, setVehicleLoading] = useState(false);
+  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState(null);
+  const [vehicleForm, setVehicleForm] = useState({
+    make: '',
+    model: '',
+    vehicleType: 'car',
+    batteryCapacity: '',
+    chargingAC: { supported: true, maxPower: '', connectorTypes: [] },
+    chargingDC: { supported: true, maxPower: '', connectorTypes: [] },
+    specifications: { year: '', range: '', weight: '' }
+  });
+  const [vehicleErrors, setVehicleErrors] = useState({});
   const [error, setError] = useState('');
+  const [vehicleActionError, setVehicleActionError] = useState('');
+  const [vehicleActionSuccess, setVehicleActionSuccess] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('corporate-admins');
+
+  // Connector types mapping
+  const connectorTypes = [
+    { value: 'type1', label: 'Type 1 (SAE J1772)' },
+    { value: 'type2', label: 'Type 2 (Mennekes / IEC Type 2)' },
+    { value: 'bharat_ac_001', label: 'Bharat AC-001' },
+    { value: 'bharat_dc_001', label: 'Bharat DC-001' },
+    { value: 'ccs2', label: 'CCS-2' },
+    { value: 'chademo', label: 'CHAdeMO' },
+    { value: 'gbt_type6', label: 'GB/T Type-6' },
+    { value: 'type7_leccs', label: 'Type-7 (LECCS)' },
+    { value: 'mcs', label: 'Megawatt Charging System (MCS)' },
+    { value: 'chaoji', label: 'ChaoJi' },
+    { value: 'other', label: 'Other' }
+  ];
+
+  // Vehicle makes for autocomplete
+  const vehicleMakes = [
+    'Tata', 'MG', 'Hyundai', 'BYD', 'Mahindra', 'Kia', 'Volkswagen',
+    'Tesla', 'Renault', 'VinFast', 'Ather', 'Ola', 'TVS', 'Bajaj',
+    'Hero Electric', 'Revolt', 'Okinawa', 'Ampere', 'Oben', 'PureEV',
+    'Vespa', 'Piaggio', 'Olectra/Volvo'
+  ];
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -595,10 +636,11 @@ const AdminDashboard = () => {
       }
       setUser(profile);
       
-      const [ov, userList, corpAdmins] = await Promise.all([
+      const [ov, userList, corpAdmins, vehicleList] = await Promise.all([
         api.adminOverview(),
         api.adminUsers(),
-        api.getCorporateAdmins()
+        api.getCorporateAdmins(),
+        loadVehicles()
       ]);
       
       console.log('Corporate Admins:', corpAdmins);
@@ -606,11 +648,250 @@ const AdminDashboard = () => {
       setOverview(ov);
       setUsers(userList);
       setCorporateAdmins(corpAdmins || []);
+      setVehicles(vehicleList || []);
     } catch (e) {
       console.error('Dashboard load error:', e);
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadVehicles = async () => {
+    try {
+      setVehicleLoading(true);
+      const data = await api.getVehiclesApi();
+      return data.success ? data.data : [];
+    } catch (error) {
+      console.error('Error loading vehicles:', error);
+      return [];
+    } finally {
+      setVehicleLoading(false);
+    }
+  };
+
+  const handleVehicleInputChange = (field) => (event) => {
+    const value = event.target.value;
+    const updated = { ...vehicleForm };
+
+    // Handle nested fields
+    if (field.startsWith('chargingAC.')) {
+      const subField = field.split('.')[1];
+      updated.chargingAC = { ...updated.chargingAC, [subField]: value };
+    } else if (field.startsWith('chargingDC.')) {
+      const subField = field.split('.')[1];
+      updated.chargingDC = { ...updated.chargingDC, [subField]: value };
+    } else if (field.startsWith('specifications.')) {
+      const subField = field.split('.')[1];
+      updated.specifications = { ...updated.specifications, [subField]: value };
+    } else {
+      updated[field] = value;
+    }
+
+    setVehicleForm(updated);
+
+    // Live validation per field
+    setVehicleErrors((prev) => {
+      const next = { ...prev };
+
+      if (field === 'make') {
+        if (!updated.make.trim()) next.make = 'Make is required';
+        else next.make = '';
+      }
+      if (field === 'model') {
+        if (!updated.model.trim()) next.model = 'Model is required';
+        else if (updated.model.length > 10) next.model = 'Model must be 10 characters or less';
+        else next.model = '';
+      }
+      if (field === 'vehicleType') {
+        if (!updated.vehicleType) next.vehicleType = 'Vehicle type is required';
+        else next.vehicleType = '';
+      }
+      if (field === 'batteryCapacity') {
+        const batteryNum = Number(updated.batteryCapacity);
+        if (updated.batteryCapacity === '') next.batteryCapacity = 'Battery capacity is required';
+        else if (isNaN(batteryNum) || batteryNum < 50 || batteryNum > 2000) next.batteryCapacity = 'Battery capacity must be between 50-2000 kWh';
+        else next.batteryCapacity = '';
+      }
+      if (field === 'chargingAC.maxPower') {
+        const powerNum = Number(updated.chargingAC.maxPower);
+        if (updated.chargingAC.maxPower !== '' && (isNaN(powerNum) || powerNum < 20 || powerNum > 500)) {
+          next.acMaxPower = 'AC max power must be between 20-500 kW';
+        } else {
+          next.acMaxPower = '';
+        }
+      }
+      if (field === 'chargingDC.maxPower') {
+        const powerNum = Number(updated.chargingDC.maxPower);
+        if (updated.chargingDC.maxPower !== '' && (isNaN(powerNum) || powerNum < 20 || powerNum > 500)) {
+          next.dcMaxPower = 'DC max power must be between 20-500 kW';
+        } else {
+          next.dcMaxPower = '';
+        }
+      }
+      if (field === 'specifications.year') {
+        const yearNum = Number(updated.specifications.year);
+        if (updated.specifications.year !== '' && (isNaN(yearNum) || yearNum < 2015 || yearNum > 2025)) {
+          next.year = 'Year must be between 2015-2025';
+        } else {
+          next.year = '';
+        }
+      }
+      if (field === 'specifications.range') {
+        const rangeNum = Number(updated.specifications.range);
+        if (updated.specifications.range !== '' && (isNaN(rangeNum) || rangeNum < 20 || rangeNum > 2000)) {
+          next.range = 'Range must be between 20-2000 km';
+        } else {
+          next.range = '';
+        }
+      }
+
+      return next;
+    });
+  };
+
+  const handleConnectorTypeChange = (chargingType, newValue) => {
+    const updated = { ...vehicleForm };
+    if (chargingType === 'AC') {
+      updated.chargingAC = { ...updated.chargingAC, connectorTypes: newValue };
+    } else if (chargingType === 'DC') {
+      updated.chargingDC = { ...updated.chargingDC, connectorTypes: newValue };
+    }
+    setVehicleForm(updated);
+  };
+
+  const handleVehicleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setVehicleLoading(true);
+      setVehicleErrors({});
+      // Client-side validation
+      const errs = {};
+      const isEmpty = (v) => v === undefined || v === null || String(v).trim() === '';
+      const toNumber = (v) => (v === '' || v === null || v === undefined ? undefined : Number(v));
+      const inRange = (num, min, max) => typeof num === 'number' && !Number.isNaN(num) && num >= min && num <= max;
+
+      if (isEmpty(vehicleForm.make)) errs.make = 'Make is required';
+      if (isEmpty(vehicleForm.model)) errs.model = 'Model is required';
+      if (isEmpty(vehicleForm.vehicleType)) errs.vehicleType = 'Vehicle type is required';
+      const batteryNum = toNumber(vehicleForm.batteryCapacity);
+      if (batteryNum === undefined) errs.batteryCapacity = 'Battery capacity is required';
+      else if (!inRange(batteryNum, 50, 2000)) errs.batteryCapacity = 'Battery capacity must be between 50-2000 kWh';
+
+      // At least one of AC/DC supported
+      const acSupported = !!vehicleForm.chargingAC?.supported;
+      const dcSupported = !!vehicleForm.chargingDC?.supported;
+      if (!acSupported && !dcSupported) errs.charging = 'Enable AC or DC charging';
+
+      // If supported, validate power when provided
+      const acPower = toNumber(vehicleForm.chargingAC?.maxPower);
+      if (acSupported && acPower !== undefined && !inRange(acPower, 20, 500)) errs.acMaxPower = 'AC max power 20–500 kW';
+      const dcPower = toNumber(vehicleForm.chargingDC?.maxPower);
+      if (dcSupported && dcPower !== undefined && !inRange(dcPower, 20, 500)) errs.dcMaxPower = 'DC max power 20–500 kW';
+
+      // Optional specs
+      const yearNum = toNumber(vehicleForm.specifications?.year);
+      if (yearNum !== undefined && !inRange(yearNum, 2015, 2025)) errs.year = 'Year 2015–2025';
+      const rangeNum = toNumber(vehicleForm.specifications?.range);
+      if (rangeNum !== undefined && !inRange(rangeNum, 20, 2000)) errs.range = 'Range 20–2000 km';
+
+      if (Object.keys(errs).length > 0) {
+        setVehicleErrors(errs);
+        setVehicleLoading(false);
+        return;
+      }
+      // Build sanitized payload
+      const acSupportedFinal = acSupported;
+      const dcSupportedFinal = dcSupported;
+
+      const payload = {
+        make: vehicleForm.make?.trim(),
+        model: vehicleForm.model?.trim(),
+        vehicleType: vehicleForm.vehicleType,
+        batteryCapacity: toNumber(vehicleForm.batteryCapacity),
+        chargingAC: {
+          supported: acSupportedFinal,
+          ...(acSupportedFinal && acPower !== undefined ? { maxPower: acPower } : {})
+        },
+        chargingDC: {
+          supported: dcSupportedFinal,
+          ...(dcSupportedFinal && dcPower !== undefined ? { maxPower: dcPower } : {})
+        },
+        specifications: {
+          ...(toNumber(vehicleForm.specifications?.year) ? { year: toNumber(vehicleForm.specifications?.year) } : {}),
+          ...(toNumber(vehicleForm.specifications?.range) ? { range: toNumber(vehicleForm.specifications?.range) } : {}),
+          ...(toNumber(vehicleForm.specifications?.weight) ? { weight: toNumber(vehicleForm.specifications?.weight) } : {})
+        }
+      };
+
+      const data = editingVehicle
+        ? await api.updateVehicleApi(editingVehicle._id, payload)
+        : await api.createVehicleApi(payload);
+      if (data.success) {
+        await loadVehicles().then(setVehicles);
+        setVehicleDialogOpen(false);
+        setEditingVehicle(null);
+        setVehicleErrors({});
+        setVehicleForm({
+          make: '',
+          model: '',
+          vehicleType: 'car',
+          batteryCapacity: '',
+          chargingAC: { supported: true, maxPower: '', connectorTypes: [] },
+          chargingDC: { supported: true, maxPower: '', connectorTypes: [] },
+          specifications: { year: '', range: '', weight: '' }
+        });
+      }
+    } catch (error) {
+      console.error('Error saving vehicle:', error);
+    } finally {
+      setVehicleLoading(false);
+    }
+  };
+
+  const handleEditVehicle = (vehicle) => {
+    setEditingVehicle(vehicle);
+    setVehicleForm({
+      make: vehicle.make || '',
+      model: vehicle.model || '',
+      vehicleType: vehicle.vehicleType || 'car',
+      batteryCapacity: vehicle.batteryCapacity || '',
+      chargingAC: {
+        supported: vehicle.chargingAC?.supported || true,
+        maxPower: vehicle.chargingAC?.maxPower || '',
+        connectorTypes: vehicle.chargingAC?.connectorTypes || []
+      },
+      chargingDC: {
+        supported: vehicle.chargingDC?.supported || true,
+        maxPower: vehicle.chargingDC?.maxPower || '',
+        connectorTypes: vehicle.chargingDC?.connectorTypes || []
+      },
+      specifications: {
+        year: vehicle.specifications?.year || '',
+        range: vehicle.specifications?.range || '',
+        weight: vehicle.specifications?.weight || ''
+      }
+    });
+    setVehicleErrors({}); // Clear errors when editing
+    setVehicleDialogOpen(true);
+  };
+
+  const handleDeleteVehicle = async (vehicleId) => {
+    if (window.confirm('Are you sure you want to delete this vehicle?')) {
+      try {
+        setVehicleActionError('');
+        const data = await api.deleteVehicleApi(vehicleId);
+        if (data.success) {
+          setVehicleActionSuccess('Vehicle deleted successfully');
+          await loadVehicles().then(setVehicles);
+          setTimeout(() => setVehicleActionSuccess(''), 2000);
+        } else {
+          setVehicleActionError(data.message || 'Failed to delete vehicle');
+        }
+      } catch (error) {
+        console.error('Error deleting vehicle:', error);
+        setVehicleActionError(error.message || 'Network error while deleting');
+      }
     }
   };
 
@@ -631,6 +912,7 @@ const AdminDashboard = () => {
     { id: 'corporate-admins', label: 'Corporate Admin Management', icon: <BusinessIcon /> },
     { id: 'add-corporate-admin', label: 'Add Corporate Admin', icon: <BusinessIcon /> },
     { id: 'stations', label: 'Station Management', icon: <StorageIcon /> },
+    { id: 'vehicles', label: 'Vehicle Management', icon: <ShoppingCartIcon /> },
     { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon /> },
     { id: 'ai-models', label: 'AI Models', icon: <PsychologyIcon /> },
     { id: 'system', label: 'System Health', icon: <MonitorIcon /> },
@@ -1040,6 +1322,168 @@ const AdminDashboard = () => {
               <UserManagementSection users={users} />
             )}
 
+            {/* Vehicle Management Section */}
+            {activeSection === 'vehicles' && (
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    Vehicle Management
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<ShoppingCartIcon />}
+                    onClick={() => setVehicleDialogOpen(true)}
+                    sx={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)'
+                      }
+                    }}
+                  >
+                    Add Vehicle
+                  </Button>
+                </Box>
+
+                <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                  <CardContent>
+                    {vehicleActionSuccess && (
+                      <Alert severity="success" sx={{ mb: 2 }}>
+                        {vehicleActionSuccess}
+                      </Alert>
+                    )}
+                    {vehicleActionError && (
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        {vehicleActionError}
+                      </Alert>
+                    )}
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Make & Model</TableCell>
+                            <TableCell>Type</TableCell>
+                            <TableCell>Battery (kWh)</TableCell>
+                            <TableCell>AC Charging</TableCell>
+                            <TableCell>DC Charging</TableCell>
+                            <TableCell>Year</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {vehicleLoading ? (
+                            <TableRow>
+                              <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                                <CircularProgress />
+                              </TableCell>
+                            </TableRow>
+                          ) : vehicles.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                  No vehicles found
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            vehicles.map((vehicle) => (
+                              <TableRow key={vehicle._id}>
+                                <TableCell>
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                      {vehicle.make} {vehicle.model}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      ID: {vehicle._id.substring(0, 8)}...
+                                    </Typography>
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip 
+                                    label={vehicle.vehicleType} 
+                                    size="small" 
+                                    sx={{ textTransform: 'capitalize' }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {vehicle.batteryCapacity} kWh
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Chip 
+                                      label={vehicle.chargingAC?.supported ? 'Yes' : 'No'} 
+                                      size="small" 
+                                      color={vehicle.chargingAC?.supported ? 'success' : 'default'}
+                                    />
+                                    {vehicle.chargingAC?.maxPower && (
+                                      <Typography variant="caption">
+                                        {vehicle.chargingAC.maxPower} kW
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Chip 
+                                      label={vehicle.chargingDC?.supported ? 'Yes' : 'No'} 
+                                      size="small" 
+                                      color={vehicle.chargingDC?.supported ? 'success' : 'default'}
+                                    />
+                                    {vehicle.chargingDC?.maxPower && (
+                                      <Typography variant="caption">
+                                        {vehicle.chargingDC.maxPower} kW
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {vehicle.specifications?.year || 'N/A'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip 
+                                    label={vehicle.isActive ? 'Active' : 'Inactive'} 
+                                    size="small" 
+                                    sx={{ 
+                                      bgcolor: vehicle.isActive ? 'success.main' : 'warning.main',
+                                      color: 'white'
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleEditVehicle(vehicle)}
+                                      sx={{ color: 'primary.main' }}
+                                      title="Edit Vehicle"
+                                    >
+                                      <SettingsIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleDeleteVehicle(vehicle._id)}
+                                      sx={{ color: 'error.main' }}
+                                      title="Delete Vehicle"
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
+              </Box>
+            )}
+
             {/* Settings Section */}
             {activeSection === 'settings' && (
               <Box sx={{ maxWidth: 520 }}>
@@ -1110,7 +1554,7 @@ const AdminDashboard = () => {
             )}
 
             {/* Other sections can be added here */}
-            {activeSection !== 'dashboard' && activeSection !== 'users' && activeSection !== 'corporate-admins' && activeSection !== 'add-corporate-admin' && activeSection !== 'settings' && (
+            {activeSection !== 'dashboard' && activeSection !== 'users' && activeSection !== 'corporate-admins' && activeSection !== 'add-corporate-admin' && activeSection !== 'vehicles' && activeSection !== 'settings' && (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <Typography variant="h5" color="text.secondary">
                   {navigationItems.find(item => item.id === activeSection)?.label} - Coming Soon
@@ -1123,6 +1567,319 @@ const AdminDashboard = () => {
           </Container>
         </Box>
       </Box>
+
+      {/* Vehicle Form Dialog */}
+      <Dialog
+        open={vehicleDialogOpen}
+        onClose={() => {
+          setVehicleDialogOpen(false);
+          setEditingVehicle(null);
+          setVehicleErrors({});
+          setVehicleForm({
+            make: '',
+            model: '',
+            vehicleType: 'car',
+            batteryCapacity: '',
+            chargingAC: { supported: true, maxPower: '', connectorTypes: [] },
+            chargingDC: { supported: true, maxPower: '', connectorTypes: [] },
+            specifications: { year: '', range: '', weight: '' }
+          });
+        }}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column'
+          }
+        }}
+      >
+        <DialogTitle sx={{ flexShrink: 0 }}>
+          {editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}
+        </DialogTitle>
+        <DialogContent sx={{ flex: 1, overflowY: 'auto', minHeight: 0, px: { xs: 2, sm: 3 }, py: 1 }}>
+          <Box id="vehicle-form" component="form" onSubmit={handleVehicleSubmit} sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Autocomplete
+                  fullWidth
+                  options={vehicleMakes}
+                  value={vehicleForm.make}
+                  onChange={(event, newValue) => {
+                    const updated = { ...vehicleForm, make: newValue || '' };
+                    setVehicleForm(updated);
+                    // Live validation
+                    setVehicleErrors((prev) => ({
+                      ...prev,
+                      make: !newValue?.trim() ? 'Make is required' : ''
+                    }));
+                  }}
+                  onInputChange={(event, newInputValue) => {
+                    if (event && event.type === 'change') {
+                      const updated = { ...vehicleForm, make: newInputValue };
+                      setVehicleForm(updated);
+                      // Live validation
+                      setVehicleErrors((prev) => ({
+                        ...prev,
+                        make: !newInputValue.trim() ? 'Make is required' : ''
+                      }));
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Make"
+                      placeholder="Search for a make (e.g., Tesla)"
+                      required
+                      error={Boolean(vehicleErrors.make)}
+                      helperText={vehicleErrors.make}
+                    />
+                  )}
+                  freeSolo
+                  clearOnEscape
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Model"
+                  value={vehicleForm.model}
+                  onChange={handleVehicleInputChange('model')}
+                  inputProps={{ maxLength: 10 }}
+                  required
+                  error={Boolean(vehicleErrors.model)}
+                  helperText={vehicleErrors.model}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth error={Boolean(vehicleErrors.vehicleType)}>
+                  <InputLabel>Vehicle Type</InputLabel>
+                  <Select
+                    value={vehicleForm.vehicleType}
+                    onChange={handleVehicleInputChange('vehicleType')}
+                    label="Vehicle Type"
+                  >
+                    <MenuItem value="car">Car</MenuItem>
+                    <MenuItem value="two_wheeler">Two Wheeler</MenuItem>
+                    <MenuItem value="three_wheeler">Three Wheeler</MenuItem>
+                    <MenuItem value="bus">Bus</MenuItem>
+                    <MenuItem value="other">Other</MenuItem>
+                  </Select>
+                  {vehicleErrors.vehicleType && (
+                    <Typography variant="caption" color="error">{vehicleErrors.vehicleType}</Typography>
+                  )}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Battery Capacity (kWh)"
+                  type="number"
+                  value={vehicleForm.batteryCapacity}
+                  onChange={handleVehicleInputChange('batteryCapacity')}
+                  required
+                  inputProps={{ min: 50, max: 2000 }}
+                  error={Boolean(vehicleErrors.batteryCapacity)}
+                  helperText={vehicleErrors.batteryCapacity}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Year"
+                  type="number"
+                  value={vehicleForm.specifications.year}
+                  onChange={handleVehicleInputChange('specifications.year')}
+                  inputProps={{ min: 2015, max: 2025 }}
+                  error={Boolean(vehicleErrors.year)}
+                  helperText={vehicleErrors.year}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Range (km)"
+                  type="number"
+                  value={vehicleForm.specifications.range}
+                  onChange={handleVehicleInputChange('specifications.range')}
+                  error={Boolean(vehicleErrors.range)}
+                  helperText={vehicleErrors.range}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>AC Charging</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={vehicleForm.chargingAC.supported}
+                          onChange={(e) => {
+                            const updated = { ...vehicleForm };
+                            updated.chargingAC = { ...updated.chargingAC, supported: e.target.checked };
+                            setVehicleForm(updated);
+                          }}
+                        />
+                      }
+                      label="AC Charging Supported"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Max AC Power (kW)"
+                      type="number"
+                      value={vehicleForm.chargingAC.maxPower}
+                      onChange={handleVehicleInputChange('chargingAC.maxPower')}
+                      disabled={!vehicleForm.chargingAC.supported}
+                      inputProps={{ min: 20, max: 500 }}
+                      error={Boolean(vehicleErrors.acMaxPower)}
+                      helperText={vehicleErrors.acMaxPower}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Autocomplete
+                      multiple
+                      disabled={!vehicleForm.chargingAC.supported}
+                      options={connectorTypes}
+                      getOptionLabel={(option) => typeof option === 'string' ? connectorTypes.find(type => type.value === option)?.label || option : option.label}
+                      value={vehicleForm.chargingAC.connectorTypes || []}
+                      onChange={(event, newValue) => {
+                        const values = newValue.map(item => typeof item === 'string' ? item : item.value);
+                        handleConnectorTypeChange('AC', values);
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="AC Connector Types"
+                          placeholder="Select connector types"
+                        />
+                      )}
+                      renderTags={(tagValue, getTagProps) =>
+                        tagValue.map((option, index) => {
+                          const label = typeof option === 'string'
+                            ? connectorTypes.find(type => type.value === option)?.label || option
+                            : option.label;
+                          return (
+                            <Chip
+                              label={label}
+                              {...getTagProps({ index })}
+                              size="small"
+                            />
+                          );
+                        })
+                      }
+                      limitTags={3}
+                      sx={{
+                        '& .MuiAutocomplete-listbox': {
+                          maxHeight: '200px'
+                        }
+                      }}
+                    />
+                  </Grid>
+                </Grid>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>DC Charging</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={vehicleForm.chargingDC.supported}
+                          onChange={(e) => {
+                            const updated = { ...vehicleForm };
+                            updated.chargingDC = { ...updated.chargingDC, supported: e.target.checked };
+                            setVehicleForm(updated);
+                          }}
+                        />
+                      }
+                      label="DC Charging Supported"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Max DC Power (kW)"
+                      type="number"
+                      value={vehicleForm.chargingDC.maxPower}
+                      onChange={handleVehicleInputChange('chargingDC.maxPower')}
+                      disabled={!vehicleForm.chargingDC.supported}
+                      inputProps={{ min: 20, max: 500 }}
+                      error={Boolean(vehicleErrors.dcMaxPower)}
+                      helperText={vehicleErrors.dcMaxPower}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Autocomplete
+                      multiple
+                      disabled={!vehicleForm.chargingDC.supported}
+                      options={connectorTypes}
+                      getOptionLabel={(option) => typeof option === 'string' ? connectorTypes.find(type => type.value === option)?.label || option : option.label}
+                      value={vehicleForm.chargingDC.connectorTypes || []}
+                      onChange={(event, newValue) => {
+                        const values = newValue.map(item => typeof item === 'string' ? item : item.value);
+                        handleConnectorTypeChange('DC', values);
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="DC Connector Types"
+                          placeholder="Select connector types"
+                        />
+                      )}
+                      renderTags={(tagValue, getTagProps) =>
+                        tagValue.map((option, index) => {
+                          const label = typeof option === 'string'
+                            ? connectorTypes.find(type => type.value === option)?.label || option
+                            : option.label;
+                          return (
+                            <Chip
+                              label={label}
+                              {...getTagProps({ index })}
+                              size="small"
+                            />
+                          );
+                        })
+                      }
+                      limitTags={3}
+                      sx={{
+                        '& .MuiAutocomplete-listbox': {
+                          maxHeight: '200px'
+                        }
+                      }}
+                    />
+                  </Grid>
+                </Grid>
+              </Grid>
+              {vehicleErrors.charging && (
+                <Grid item xs={12}>
+                  <Alert severity="error">{vehicleErrors.charging}</Alert>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ flexShrink: 0, borderTop: 1, borderColor: 'divider' }}>
+          <Button 
+            onClick={() => {
+              setVehicleDialogOpen(false);
+              setEditingVehicle(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit"
+            form="vehicle-form"
+            variant="contained" 
+            disabled={vehicleLoading}
+          >
+            {vehicleLoading ? 'Saving...' : (editingVehicle ? 'Update' : 'Create')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

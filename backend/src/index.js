@@ -14,6 +14,7 @@ import franchiseOwnerRoutes from './routes/franchiseOwner.routes.js';
 import stationManagerRoutes from './routes/stationManager.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import bookingRoutes from './routes/booking.routes.js';
+import vehicleRoutes from './routes/vehicle.routes.js';
 // Removed deprecated corporate application routes
 
 // Ensure env is loaded from backend/.env or projectRoot/.env
@@ -60,6 +61,7 @@ app.use('/api/franchise-owner', franchiseOwnerRoutes);
 app.use('/api/station-manager', stationManagerRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/vehicles', vehicleRoutes);
 // app.use('/api/corporates', corporateApplicationRoutes); // deprecated
 
 // Error handler

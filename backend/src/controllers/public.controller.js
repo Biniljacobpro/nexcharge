@@ -1,90 +1,99 @@
 import Station from '../models/station.model.js';
+import Vehicle from '../models/vehicle.model.js';
 
-// GET /api/public/stations
-// Returns a minimal list of stations for the public map (no auth required)
-export const getPublicStations = async (_req, res) => {
+// GET /api/public/stations - Get all public stations
+export const getPublicStations = async (req, res) => {
   try {
-    const stations = await Station.find({ 'operational.status': { $in: ['active', 'maintenance'] } })
-      .select('name location coordinates capacity pricing operational');
+    const stations = await Station.find({ 'operational.status': 'active' })
+      .select('name location capacity pricing operational')
+      .lean();
 
-    const result = stations.map((s) => ({
-      id: s._id,
-      name: s.name,
-      address: s.location?.address || '',
-      city: s.location?.city || '',
-      state: s.location?.state || '',
-      pincode: s.location?.pincode || '',
-      dms: s.location?.dms || '',
-      lat: s.location?.coordinates?.latitude ?? 0,
-      lng: s.location?.coordinates?.longitude ?? 0,
-      totalChargers: s.capacity?.totalChargers ?? 0,
+    const stationsWithAvailability = stations.map(s => ({
+      ...s,
       availableSlots: s.capacity?.chargers?.filter(c => c.isAvailable).length || s.capacity?.availableSlots || 0,
-      chargerTypes: s.capacity?.chargerTypes || [],
-      availableChargers: s.capacity?.chargers?.filter(c => c.isAvailable) || [],
-      maxPowerPerCharger: s.capacity?.maxPowerPerCharger ?? 0,
-      totalPowerCapacity: s.capacity?.totalPowerCapacity ?? 0,
-      pricingModel: s.pricing?.model || 'per_kwh',
-      basePrice: s.pricing?.basePrice ?? 0,
-      status: s.operational?.status || 'inactive'
+      availableChargers: s.capacity?.chargers?.filter(c => c.isAvailable) || []
     }));
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: stationsWithAvailability });
   } catch (error) {
     console.error('Error fetching public stations:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
-// GET /api/public/stations/:id
+// GET /api/public/stations/:id - Get single public station
 export const getPublicStationById = async (req, res) => {
   try {
     const { id } = req.params;
-    const s = await Station.findById(id);
-    if (!s) return res.status(404).json({ success: false, message: 'Station not found' });
+    const station = await Station.findById(id)
+      .select('name location capacity pricing operational analytics')
+      .lean();
 
-    const data = {
-      id: s._id,
-      name: s.name,
-      code: s.code,
-      description: s.description || '',
-      address: s.location?.address || '',
-      city: s.location?.city || '',
-      state: s.location?.state || '',
-      country: s.location?.country || '',
-      pincode: s.location?.pincode || '',
-      dms: s.location?.dms || '',
-      coordinates: {
-        latitude: s.location?.coordinates?.latitude ?? 0,
-        longitude: s.location?.coordinates?.longitude ?? 0,
-      },
-      nearbyLandmarks: s.location?.nearbyLandmarks || '',
-      capacity: {
-        totalChargers: s.capacity?.totalChargers ?? 0,
-        chargerTypes: s.capacity?.chargerTypes || [],
-        availableChargers: s.capacity?.chargers?.filter(c => c.isAvailable) || [],
-        maxPowerPerCharger: s.capacity?.maxPowerPerCharger ?? 0,
-        totalPowerCapacity: s.capacity?.totalPowerCapacity ?? 0,
-        availableSlots: s.capacity?.chargers?.filter(c => c.isAvailable).length || s.capacity?.availableSlots || 0,
-      },
-      pricing: {
-        model: s.pricing?.model || 'per_kwh',
-        basePrice: s.pricing?.basePrice ?? 0,
-        cancellationPolicy: s.pricing?.cancellationPolicy || ''
-      },
-      operational: s.operational || {},
-      contact: s.contact || {},
-      amenities: s.amenities || [],
-      images: s.images || [],
-      status: s.operational?.status || 'inactive',
-      createdAt: s.createdAt,
-      updatedAt: s.updatedAt
+    if (!station) {
+      return res.status(404).json({ success: false, message: 'Station not found' });
+    }
+
+    const stationWithAvailability = {
+      ...station,
+      availableSlots: station.capacity?.chargers?.filter(c => c.isAvailable).length || station.capacity?.availableSlots || 0,
+      availableChargers: station.capacity?.chargers?.filter(c => c.isAvailable) || []
     };
 
-    res.json({ success: true, data });
+    res.json({ success: true, data: stationWithAvailability });
   } catch (error) {
-    console.error('Error fetching station by id:', error);
+    console.error('Error fetching public station:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
+// GET /api/public/vehicles - Get all active vehicles for EV users
+export const getPublicVehicles = async (req, res) => {
+  try {
+    const { vehicleType, make, search } = req.query;
+    const query = { isActive: true };
 
+    if (vehicleType) {
+      query.vehicleType = vehicleType;
+    }
+
+    if (make) {
+      query.make = { $regex: make, $options: 'i' };
+    }
+
+    if (search) {
+      query.$or = [
+        { make: { $regex: search, $options: 'i' } },
+        { model: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const vehicles = await Vehicle.find(query)
+      .select('make model vehicleType batteryCapacity chargingAC chargingDC specifications images displayName fullName')
+      .sort({ make: 1, model: 1 })
+      .lean();
+
+    res.json({ success: true, data: vehicles });
+  } catch (error) {
+    console.error('Error fetching public vehicles:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// GET /api/public/vehicles/:id - Get single vehicle details
+export const getPublicVehicleById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const vehicle = await Vehicle.findById(id)
+      .select('make model vehicleType batteryCapacity chargingAC chargingDC specifications images displayName fullName')
+      .lean();
+
+    if (!vehicle || !vehicle.isActive) {
+      return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+
+    res.json({ success: true, data: vehicle });
+  } catch (error) {
+    console.error('Error fetching public vehicle:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};

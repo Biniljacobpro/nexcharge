@@ -233,4 +233,49 @@ export const resetPasswordWithOtpApi = async (email, newPassword) => {
   return data;
 };
 
+// Public: check if email is already registered (for live validation)
+export const checkEmailAvailabilityApi = async (email) => {
+  const res = await fetch(`${API_BASE}/auth/check-email?email=${encodeURIComponent(email)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Email check failed');
+  return data; // { success: true, isAvailable: boolean }
+};
+
+// Vehicles (Admin)
+export const getVehiclesApi = async () => {
+  const res = await authFetch(`${API_BASE}/vehicles`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to load vehicles');
+  return data;
+};
+
+export const createVehicleApi = async (payload) => {
+  const res = await authFetch(`${API_BASE}/vehicles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to create vehicle');
+  return data;
+};
+
+export const updateVehicleApi = async (id, payload) => {
+  const res = await authFetch(`${API_BASE}/vehicles/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update vehicle');
+  return data;
+};
+
+export const deleteVehicleApi = async (id) => {
+  const res = await authFetch(`${API_BASE}/vehicles/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to delete vehicle');
+  return data;
+};
+
 export default API_BASE;

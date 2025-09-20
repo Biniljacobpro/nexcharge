@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Box, 
-  Container, 
-  Typography, 
-  Chip, 
-  Paper, 
-  Grid, 
-  CircularProgress, 
+import {
+  Box,
+  Container,
+  Typography,
+  Chip,
+  Grid,
+  CircularProgress,
   Button,
   Dialog,
   DialogTitle,
@@ -19,18 +18,33 @@ import {
   Select,
   MenuItem,
   Alert,
-  Snackbar
+  Snackbar,
+  Card,
+  CardContent,
+  Avatar,
+  Divider,
+  Stack,
+  Rating
 } from '@mui/material';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import EvStationIcon from '@mui/icons-material/EvStation';
+import DirectionsIcon from '@mui/icons-material/Directions';
+import WifiIcon from '@mui/icons-material/Wifi';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
+import WcIcon from '@mui/icons-material/Wc';
+import LocalParkingIcon from '@mui/icons-material/LocalParking';
  
 
 const StationDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [station, setStation] = useState(null);
+  const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [bookingDialog, setBookingDialog] = useState(false);
@@ -40,14 +54,9 @@ const StationDetails = () => {
     duration: '2', // Default 2 hours
     startTime: null,
     endTime: null,
-    vehicleInfo: {
-      make: '',
-      model: '',
-      year: '',
-      batteryCapacity: '',
-      currentCharge: '',
-      targetCharge: ''
-    }
+    selectedVehicleId: '',
+    currentCharge: '',
+    targetCharge: ''
   });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
@@ -105,14 +114,39 @@ const StationDetails = () => {
     }
   };
 
+  const loadVehicles = async () => {
+    try {
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      const res = await fetch(`${apiBase}/public/vehicles`);
+      if (!res.ok) throw new Error(`Failed to load vehicles: ${res.status}`);
+      const data = await res.json();
+      if (data.success) {
+        setVehicles(data.data);
+      }
+    } catch (err) {
+      console.error('Error loading vehicles:', err);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
         const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
-        const res = await fetch(`${apiBase}/public/stations/${id}`);
-        if (!res.ok) throw new Error(`Failed to load station: ${res.status}`);
-        const body = await res.json();
-        setStation(body?.data);
+        const [stationRes, vehiclesRes] = await Promise.all([
+          fetch(`${apiBase}/public/stations/${id}`),
+          fetch(`${apiBase}/public/vehicles`)
+        ]);
+        
+        if (!stationRes.ok) throw new Error(`Failed to load station: ${stationRes.status}`);
+        const stationData = await stationRes.json();
+        setStation(stationData?.data);
+
+        if (vehiclesRes.ok) {
+          const vehiclesData = await vehiclesRes.json();
+          if (vehiclesData.success) {
+            setVehicles(vehiclesData.data);
+          }
+        }
       } catch (e) {
         setError(e.message);
       } finally {
@@ -135,8 +169,8 @@ const StationDetails = () => {
   }
 
   const handleBookingSubmit = async () => {
-    if (!bookingForm.chargerType || !bookingForm.startTime || !bookingForm.endTime) {
-      setSnackbar({ open: true, message: 'Please fill all required fields', severity: 'error' });
+    if (!bookingForm.chargerType || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.selectedVehicleId) {
+      setSnackbar({ open: true, message: 'Please fill all required fields including vehicle selection', severity: 'error' });
       return;
     }
 
@@ -156,7 +190,9 @@ const StationDetails = () => {
           chargerType: bookingForm.chargerType,
           startTime: new Date(bookingForm.startTime).toISOString(),
           endTime: new Date(bookingForm.endTime).toISOString(),
-          vehicleInfo: bookingForm.vehicleInfo
+          vehicleId: bookingForm.selectedVehicleId,
+          currentCharge: bookingForm.currentCharge,
+          targetCharge: bookingForm.targetCharge
         })
       });
 
@@ -217,92 +253,577 @@ const StationDetails = () => {
   }
 
   return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
-        <AnimatedBackground />
-        <Navbar />
-        <Container maxWidth="lg" sx={{ py: 4 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Button variant="text" color="inherit" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />}>
-              Back
-            </Button>
-          </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Box>
-              <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>{station.name}</Typography>
-              <Typography variant="body1" color="text.secondary">
-                {station.address}, {station.city}, {station.state} {station.pincode}
-              </Typography>
-            </Box>
-          </Box>
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+      <AnimatedBackground />
+      <Navbar />
 
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={8}>
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Available Chargers</Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-                <Chip label={`Total chargers: ${station.capacity?.totalChargers ?? 0}`} />
-                <Chip 
-                  label={`Available: ${station.capacity?.availableSlots ?? 0}`} 
-                  color={station.capacity?.availableSlots > 0 ? "success" : "error"}
-                  variant="filled"
-                />
-                <Chip label={`Max power: ${station.capacity?.maxPowerPerCharger ?? 0} kW`} />
-                <Chip label={`Total capacity: ${station.capacity?.totalPowerCapacity ?? 0} kW`} />
-              </Box>
-              
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 1 }}>Available Charger Types</Typography>
-              <Grid container spacing={2}>
-                {(station.capacity?.chargerTypes || []).map((type, idx) => {
-                  const available = getAvailableChargersByType(type);
-                  return (
-                    <Grid item xs={12} sm={6} md={4} key={idx}>
-                      <Paper sx={{ p: 2, border: '1px solid #e0e0e0' }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                          {type.replace('_', ' ').toUpperCase()}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Available: {available.length}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Power: {available[0]?.power || station.capacity?.maxPowerPerCharger} kW
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Pricing</Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>Model:</strong> {station.pricing?.model}
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>Base price:</strong> ₹{station.pricing?.basePrice ?? 0}/kWh
-              </Typography>
-              {station.pricing?.cancellationPolicy && (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                  <strong>Cancellation Policy:</strong><br />
-                  {station.pricing.cancellationPolicy}
-                </Typography>
-              )}
-            </Paper>
-          </Grid>
-        </Grid>
-
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-          <Button 
-            variant="contained" 
-            size="large"
-            onClick={() => setBookingDialog(true)}
-            disabled={station.capacity?.availableSlots === 0}
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        {/* Back Button */}
+        <Box sx={{ mb: 3 }}>
+          <Button
+            variant="text"
+            color="inherit"
+            onClick={() => navigate(-1)}
+            startIcon={<ArrowBackIcon />}
+            sx={{ mb: 2 }}
           >
-            Book Now
+            Back to Map
           </Button>
         </Box>
+
+        {/* Enhanced Hero Section */}
+        <Card sx={{
+          mb: 4,
+          borderRadius: 4,
+          overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          position: 'relative'
+        }}>
+          <Box sx={{
+            p: 4,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            position: 'relative',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.05"%3E%3Ccircle cx="7" cy="7" r="2"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+            }
+          }}>
+            <Grid container spacing={4} alignItems="center">
+              <Grid item xs={12} md={8}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                  <Box sx={{
+                    p: 1.5,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    mr: 3,
+                    backdropFilter: 'blur(10px)'
+                  }}>
+                    <EvStationIcon sx={{ fontSize: 48 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h2" sx={{
+                      fontWeight: 800,
+                      mb: 1,
+                      textShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                      letterSpacing: '-0.025em'
+                    }}>
+                      {station.name}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <LocationOnIcon sx={{ mr: 1.5, fontSize: 20 }} />
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '1.1rem' }}>
+                        {station.location?.address}, {station.location?.city}, {station.location?.state} {station.location?.pincode}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Rating value={4.5} readOnly precision={0.5} sx={{ color: '#fbbf24', mr: 1 }} />
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>4.5 (128 reviews)</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <AccessTimeIcon sx={{ mr: 1, fontSize: 18 }} />
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {station.operational?.operatingHours?.is24Hours ? '🟢 24/7 Open' : '🕐 Limited Hours'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box sx={{
+                  textAlign: { xs: 'left', md: 'right' },
+                  p: 3,
+                  borderRadius: 3,
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255,255,255,0.2)'
+                }}>
+                  <Chip
+                    label={station.capacity?.availableSlots > 0 ? `⚡ ${station.capacity.availableSlots} Available` : '🚫 Full'}
+                    color={station.capacity?.availableSlots > 0 ? "success" : "error"}
+                    variant="filled"
+                    sx={{
+                      fontSize: '1rem',
+                      py: 1.5,
+                      px: 3,
+                      mb: 3,
+                      fontWeight: 600,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                    }}
+                  />
+                  <Typography variant="h3" sx={{
+                    fontWeight: 800,
+                    mb: 1,
+                    textShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                  }}>
+                    ₹{station.pricing?.basePrice ?? 0}
+                  </Typography>
+                  <Typography variant="body1" sx={{ opacity: 0.9, fontWeight: 500 }}>
+                    per kWh
+                  </Typography>
+                  <Typography variant="caption" sx={{
+                    opacity: 0.8,
+                    mt: 1,
+                    display: 'block',
+                    fontSize: '0.85rem'
+                  }}>
+                    Starting price
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </Box>
+        </Card>
+
+        {/* Main Content Grid */}
+        <Grid container spacing={4}>
+          {/* Left Column - Chargers and Amenities */}
+          <Grid item xs={12} lg={8}>
+            {/* Available Chargers Overview */}
+            <Card sx={{ mb: 4, borderRadius: 3 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, display: 'flex', alignItems: 'center' }}>
+                  <EvStationIcon sx={{ mr: 1 }} />
+                  Charging Overview
+                </Typography>
+
+                {/* Enhanced Status Overview */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                    📊 Station Overview
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: '#f8fafc',
+                        border: '1px solid #e5e7eb',
+                        textAlign: 'center'
+                      }}>
+                        <Typography variant="h5" sx={{ fontWeight: 700, color: '#1f2937', mb: 0.5 }}>
+                          {station.capacity?.totalChargers ?? 0}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                          Total Chargers
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: station.capacity?.availableSlots > 0 ? '#f0fdf4' : '#fef2f2',
+                        border: `1px solid ${station.capacity?.availableSlots > 0 ? '#10b981' : '#dc2626'}`,
+                        textAlign: 'center'
+                      }}>
+                        <Typography variant="h5" sx={{
+                          fontWeight: 700,
+                          color: station.capacity?.availableSlots > 0 ? '#10b981' : '#dc2626',
+                          mb: 0.5
+                        }}>
+                          {station.capacity?.availableSlots ?? 0}
+                        </Typography>
+                        <Typography variant="caption" sx={{
+                          fontWeight: 500,
+                          color: station.capacity?.availableSlots > 0 ? '#059669' : '#b91c1c'
+                        }}>
+                          Available Now
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: '#f0f9ff',
+                        border: '1px solid #0ea5e9',
+                        textAlign: 'center'
+                      }}>
+                        <Typography variant="h5" sx={{ fontWeight: 700, color: '#0ea5e9', mb: 0.5 }}>
+                          {station.capacity?.maxPowerPerCharger ?? 0}
+                        </Typography>
+                        <Typography variant="caption" color="#0369a1" sx={{ fontWeight: 500 }}>
+                          Max Power (kW)
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: '#fef3c7',
+                        border: '1px solid #f59e0b',
+                        textAlign: 'center'
+                      }}>
+                        <Typography variant="h5" sx={{ fontWeight: 700, color: '#92400e', mb: 0.5 }}>
+                          {station.capacity?.totalPowerCapacity ?? 0}
+                        </Typography>
+                        <Typography variant="caption" color="#78350f" sx={{ fontWeight: 500 }}>
+                          Total Capacity (kW)
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Box>
+
+                {/* Charger Types Grid */}
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  Available Connector Types
+                </Typography>
+                <Grid container spacing={3}>
+                  {(station.capacity?.chargerTypes || []).map((type, idx) => {
+                    const available = getAvailableChargersByType(type);
+                    const power = available[0]?.power || station.capacity?.maxPowerPerCharger || 50;
+                    const isAvailable = available.length > 0;
+
+                    return (
+                      <Grid item xs={12} sm={6} md={4} key={idx}>
+                        <Card sx={{
+                          border: `2px solid ${isAvailable ? '#10b981' : '#f3f4f6'}`,
+                          borderRadius: 3,
+                          transition: 'all 0.3s ease',
+                          background: isAvailable ? 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' : '#fafafa',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+                            borderColor: isAvailable ? '#059669' : '#667eea'
+                          }
+                        }}>
+                          <CardContent sx={{ p: 3, textAlign: 'center' }}>
+                            <Avatar sx={{
+                              bgcolor: isAvailable ? '#10b981' : '#dc2626',
+                              width: 64,
+                              height: 64,
+                              mx: 'auto',
+                              mb: 2,
+                              boxShadow: '0 4px 14px rgba(0,0,0,0.1)'
+                            }}>
+                              <EvStationIcon sx={{ fontSize: 32 }} />
+                            </Avatar>
+                            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1f2937' }}>
+                              {type.replace('_', ' ').toUpperCase()}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
+                              Power Output
+                            </Typography>
+                            <Typography variant="h4" sx={{
+                              fontWeight: 800,
+                              color: isAvailable ? '#10b981' : '#6b7280',
+                              mb: 2,
+                              textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                            }}>
+                              {power} kW
+                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, alignItems: 'center' }}>
+                              <Chip
+                                label={isAvailable ? `${available.length} Available` : 'Not Available'}
+                                color={isAvailable ? "success" : "error"}
+                                variant={isAvailable ? "filled" : "outlined"}
+                                size="small"
+                                sx={{
+                                  fontWeight: 600,
+                                  '& .MuiChip-label': { fontSize: '0.8rem' }
+                                }}
+                              />
+                              {isAvailable && (
+                                <Typography variant="caption" sx={{ color: '#059669', fontWeight: 600 }}>
+                                  ✓ Ready to charge
+                                </Typography>
+                              )}
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              </CardContent>
+            </Card>
+
+            {/* Amenities Section */}
+            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  Amenities & Facilities
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  Additional services available at this station
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { icon: <LocalParkingIcon />, label: 'Free Parking', available: station.operational?.parkingSlots > 0, description: `${station.operational?.parkingSlots || 0} spots` },
+                    { icon: <WifiIcon />, label: 'Wi-Fi', available: true, description: 'High-speed internet' },
+                    { icon: <RestaurantIcon />, label: 'Food & Drinks', available: false, description: 'Coming soon' },
+                    { icon: <WcIcon />, label: 'Restrooms', available: true, description: 'Clean facilities' },
+                  ].map((amenity, idx) => (
+                    <Grid item xs={6} sm={3} key={idx}>
+                      <Box sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        p: 2.5,
+                        borderRadius: 3,
+                        bgcolor: amenity.available ? 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' : '#fafafa',
+                        border: `2px solid ${amenity.available ? '#10b981' : '#e5e7eb'}`,
+                        transition: 'all 0.3s ease',
+                        cursor: amenity.available ? 'default' : 'not-allowed',
+                        '&:hover': amenity.available ? {
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 6px 20px rgba(16, 185, 129, 0.15)',
+                          borderColor: '#059669'
+                        } : {}
+                      }}>
+                        <Box sx={{
+                          color: amenity.available ? '#10b981' : '#9ca3af',
+                          mb: 1.5,
+                          fontSize: '2rem'
+                        }}>
+                          {amenity.icon}
+                        </Box>
+                        <Typography variant="body2" sx={{
+                          textAlign: 'center',
+                          fontWeight: 600,
+                          color: amenity.available ? '#1f2937' : '#6b7280',
+                          mb: 0.5
+                        }}>
+                          {amenity.label}
+                        </Typography>
+                        <Typography variant="caption" sx={{
+                          textAlign: 'center',
+                          color: amenity.available ? '#059669' : '#9ca3af',
+                          fontWeight: 500
+                        }}>
+                          {amenity.description}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Right Column - Pricing and Booking */}
+          <Grid item xs={12} lg={4}>
+            {/* Pricing Card */}
+            <Card sx={{
+              mb: 3,
+              borderRadius: 3,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+              border: '1px solid #e5e7eb'
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  💰 Pricing & Booking
+                </Typography>
+
+                {/* Price Highlight Box */}
+                <Box sx={{
+                  mb: 3,
+                  p: 3,
+                  borderRadius: 3,
+                  background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                  border: '2px solid #0ea5e9',
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
+                    Base Rate
+                  </Typography>
+                  <Typography variant="h3" sx={{
+                    fontWeight: 800,
+                    color: '#0ea5e9',
+                    mb: 1,
+                    textShadow: '0 2px 4px rgba(14, 165, 233, 0.2)'
+                  }}>
+                    ₹{station.pricing?.basePrice ?? 0}
+                  </Typography>
+                  <Typography variant="body1" color="#0369a1" sx={{ fontWeight: 600 }}>
+                    per kWh
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    {station.pricing?.model?.replace('_', ' ').toUpperCase() || 'Per kWh'} pricing
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                    Operating Hours
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AccessTimeIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {station.operational?.operatingHours?.is24Hours ?
+                        '🟢 Open 24/7' :
+                        `🕐 ${station.operational?.operatingHours?.customHours?.start || '00:00'} - ${station.operational?.operatingHours?.customHours?.end || '23:59'}`
+                      }
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {station.pricing?.cancellationPolicy && (
+                  <Box sx={{ mb: 3, p: 2, bgcolor: '#fef3c7', borderRadius: 2, border: '1px solid #f59e0b' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, color: '#92400e', mb: 1 }}>
+                      📋 Cancellation Policy
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#78350f' }}>
+                      {station.pricing.cancellationPolicy}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Quick Actions */}
+                <Stack spacing={2}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DirectionsIcon />}
+                    onClick={() => {
+                      const url = `https://www.google.com/maps/dir/?api=1&destination=${station.location?.coordinates?.latitude},${station.location?.coordinates?.longitude}`;
+                      window.open(url, '_blank');
+                    }}
+                    fullWidth
+                    sx={{
+                      borderRadius: 3,
+                      py: 1.5,
+                      borderColor: '#667eea',
+                      color: '#667eea',
+                      '&:hover': {
+                        borderColor: '#5a67d8',
+                        bgcolor: '#f0f4ff',
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.2)'
+                      }
+                    }}
+                  >
+                    🗺️ Get Directions
+                  </Button>
+
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => setBookingDialog(true)}
+                    disabled={station.capacity?.availableSlots === 0}
+                    fullWidth
+                    sx={{
+                      borderRadius: 3,
+                      py: 1.5,
+                      fontSize: '1.1rem',
+                      fontWeight: 600,
+                      background: station.capacity?.availableSlots === 0
+                        ? '#dc2626'
+                        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      '&:hover': {
+                        background: station.capacity?.availableSlots === 0
+                          ? '#b91c1c'
+                          : 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
+                      },
+                      '&:disabled': {
+                        background: '#dc2626',
+                        color: 'white'
+                      }
+                    }}
+                  >
+                    {station.capacity?.availableSlots === 0 ? '🚫 Station Full' : '⚡ Book Now'}
+                  </Button>
+                </Stack>
+
+                {/* Additional Info */}
+                <Box sx={{ mt: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e5e7eb' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', fontSize: '0.85rem' }}>
+                    💡 Book ahead to secure your charging slot and avoid wait times
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Station Photos Section */}
+            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  Station Photos & Gallery
+                </Typography>
+                <Grid container spacing={2}>
+                  {/* Main photo placeholder */}
+                  <Grid item xs={12} md={8}>
+                    <Box sx={{
+                      height: 240,
+                      bgcolor: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+                      borderRadius: 3,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '3px dashed #9ca3af',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'linear-gradient(45deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
+                      }
+                    }}>
+                      <EvStationIcon sx={{ fontSize: 64, color: '#9ca3af', mb: 2 }} />
+                      <Typography variant="h6" color="#6b7280" sx={{ fontWeight: 600, mb: 1 }}>
+                        Station Gallery
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', px: 2 }}>
+                        High-quality photos of charging bays, facilities, and surroundings coming soon
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  {/* Thumbnail placeholders */}
+                  <Grid item xs={12} md={4}>
+                    <Stack spacing={2}>
+                      {[1, 2, 3].map((i) => (
+                        <Box key={i} sx={{
+                          height: 70,
+                          bgcolor: '#f9fafb',
+                          borderRadius: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '2px dashed #e5e7eb',
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            bgcolor: '#f3f4f6',
+                            borderColor: '#667eea'
+                          }
+                        }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Photo {i}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Grid>
+                </Grid>
+
+                {/* Photo upload hint */}
+                <Box sx={{ mt: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e5e7eb' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+                    📸 Station photos help EV drivers make informed decisions about their charging locations
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
         {/* Booking Dialog */}
         <Dialog open={bookingDialog} onClose={() => setBookingDialog(false)} maxWidth="md" fullWidth>
@@ -374,45 +895,30 @@ const StationDetails = () => {
               
               <Grid item xs={12}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'text.secondary' }}>
-                  Vehicle Information (for charging optimization)
+                  Vehicle Selection (for charging optimization)
                 </Typography>
               </Grid>
               
               <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Vehicle Make (e.g., Tesla, BMW)"
-                  value={bookingForm.vehicleInfo.make}
-                  onChange={(e) => setBookingForm({
-                    ...bookingForm, 
-                    vehicleInfo: {...bookingForm.vehicleInfo, make: e.target.value}
-                  })}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Vehicle Model (e.g., Model 3, iX)"
-                  value={bookingForm.vehicleInfo.model}
-                  onChange={(e) => setBookingForm({
-                    ...bookingForm, 
-                    vehicleInfo: {...bookingForm.vehicleInfo, model: e.target.value}
-                  })}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Battery Capacity (kWh)"
-                  type="number"
-                  value={bookingForm.vehicleInfo.batteryCapacity}
-                  onChange={(e) => setBookingForm({
-                    ...bookingForm, 
-                    vehicleInfo: {...bookingForm.vehicleInfo, batteryCapacity: e.target.value}
-                  })}
-                />
+                <FormControl fullWidth>
+                  <InputLabel>Select Your Vehicle</InputLabel>
+                  <Select
+                    value={bookingForm.selectedVehicleId}
+                    onChange={(e) => setBookingForm({
+                      ...bookingForm, 
+                      selectedVehicleId: e.target.value
+                    })}
+                    label="Select Your Vehicle"
+                  >
+                    {vehicles.map((vehicle) => (
+                      <MenuItem key={vehicle._id} value={vehicle._id}>
+                        {vehicle.displayName || `${vehicle.make} ${vehicle.model}`} 
+                        {vehicle.specifications?.year && ` (${vehicle.specifications.year})`}
+                        {vehicle.batteryCapacity && ` - ${vehicle.batteryCapacity} kWh`}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               
               <Grid item xs={12} sm={6}>
@@ -421,10 +927,10 @@ const StationDetails = () => {
                   label="Current Charge Level (%)"
                   type="number"
                   inputProps={{ min: 0, max: 100 }}
-                  value={bookingForm.vehicleInfo.currentCharge}
+                  value={bookingForm.currentCharge}
                   onChange={(e) => setBookingForm({
                     ...bookingForm, 
-                    vehicleInfo: {...bookingForm.vehicleInfo, currentCharge: e.target.value}
+                    currentCharge: e.target.value
                   })}
                 />
               </Grid>
@@ -435,10 +941,10 @@ const StationDetails = () => {
                   label="Target Charge Level (%)"
                   type="number"
                   inputProps={{ min: 0, max: 100 }}
-                  value={bookingForm.vehicleInfo.targetCharge}
+                  value={bookingForm.targetCharge}
                   onChange={(e) => setBookingForm({
                     ...bookingForm, 
-                    vehicleInfo: {...bookingForm.vehicleInfo, targetCharge: e.target.value}
+                    targetCharge: e.target.value
                   })}
                 />
               </Grid>
