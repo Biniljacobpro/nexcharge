@@ -287,5 +287,70 @@ export const franchiseOwnerService = {
       console.error('Error updating profile:', error);
       throw error;
     }
+  },
+
+  // Station manager assignment functions
+  getAvailableStationManagers: async () => {
+    try {
+      const response = await authFetch(`${API_BASE}/managers/available`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch available station managers');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching available station managers:', error);
+      throw error;
+    }
+  },
+
+  getUnassignedStations: async () => {
+    try {
+      const response = await authFetch(`${API_BASE}/stations/unassigned`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch unassigned stations');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching unassigned stations:', error);
+      throw error;
+    }
+  },
+
+  assignStationToManager: async (managerId, stationId) => {
+    try {
+      const response = await authFetch(`${API_BASE}/assign-station`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ managerId, stationId }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to assign station to manager');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error assigning station to manager:', error);
+      throw error;
+    }
+  },
+
+  unassignStationFromManager: async (managerId, stationId) => {
+    try {
+      const response = await authFetch(`${API_BASE}/unassign-station`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ managerId, stationId }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to unassign station from manager');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error unassigning station from manager:', error);
+      throw error;
+    }
   }
 };

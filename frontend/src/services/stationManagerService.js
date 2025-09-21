@@ -1,12 +1,12 @@
 import { authFetch } from '../utils/api';
 
-const API_BASE = '/station-manager';
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
 
 export const stationManagerService = {
   // Get dashboard data
   getDashboardData: async () => {
     try {
-      const response = await authFetch(`${API_BASE}/dashboard`);
+      const response = await authFetch(`${API_BASE}/station-manager/dashboard`);
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.message || 'Failed to fetch dashboard data');
@@ -27,7 +27,7 @@ export const stationManagerService = {
       if (params.page) queryParams.append('page', params.page);
       if (params.limit) queryParams.append('limit', params.limit);
 
-      const response = await authFetch(`${API_BASE}/bookings?${queryParams}`);
+      const response = await authFetch(`${API_BASE}/station-manager/bookings?${queryParams}`);
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.message || 'Failed to fetch bookings');
@@ -42,7 +42,7 @@ export const stationManagerService = {
   // Update booking status
   updateBookingStatus: async (bookingId, status, notes = '') => {
     try {
-      const response = await authFetch(`${API_BASE}/bookings/${bookingId}/status`, {
+      const response = await authFetch(`${API_BASE}/station-manager/bookings/${bookingId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, notes })
@@ -61,7 +61,7 @@ export const stationManagerService = {
   // Get performance reports
   getPerformanceReports: async (period = '30d') => {
     try {
-      const response = await authFetch(`${API_BASE}/reports?period=${period}`);
+      const response = await authFetch(`${API_BASE}/station-manager/reports?period=${period}`);
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.message || 'Failed to fetch performance reports');

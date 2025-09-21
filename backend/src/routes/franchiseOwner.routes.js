@@ -13,7 +13,15 @@ import {
   updatePromotion,
   deletePromotion,
   changePassword,
-  updateProfile
+  updateProfile,
+  getStationManagers,
+  addStationManager,
+  updateStationManager,
+  deleteStationManager,
+  assignStationToManager,
+  unassignStationFromManager,
+  getAvailableStationManagers,
+  getUnassignedStations
 } from '../controllers/franchiseOwner.controller.js';
 import { requireAuth, requireRole, enforcePasswordChange } from '../middlewares/auth.js';
 
@@ -38,11 +46,16 @@ router.put('/stations/:stationId', updateStation);
 router.delete('/stations/:stationId', deleteStation);
 
 // Station manager routes
-import { getStationManagers, addStationManager, updateStationManager, deleteStationManager } from '../controllers/franchiseOwner.controller.js';
 router.get('/managers', getStationManagers);
 router.post('/managers', addStationManager);
 router.put('/managers/:managerId', updateStationManager);
 router.delete('/managers/:managerId', deleteStationManager);
+
+// Station manager assignment routes
+router.get('/managers/available', getAvailableStationManagers);
+router.get('/stations/unassigned', getUnassignedStations);
+router.post('/assign-station', assignStationToManager);
+router.post('/unassign-station', unassignStationFromManager);
 
 // Compliance routes
 router.get('/compliance', getComplianceStatus);

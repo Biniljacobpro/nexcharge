@@ -5,7 +5,7 @@ import User from '../models/user.model.js';
 // Get dashboard data for station manager
 export const getDashboardData = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub;
     
     // Get user's assigned stations
     const user = await User.findById(userId).populate('roleSpecificData.stationManagerInfo.assignedStations');
@@ -144,12 +144,29 @@ export const getDashboardData = async (req, res) => {
         assignedStations: stations.map(station => ({
           id: station._id,
           name: station.name,
-          location: station.location?.address || 'N/A',
+          code: station.code,
+          description: station.description,
+          location: {
+            address: station.location?.address || 'N/A',
+            city: station.location?.city || 'N/A',
+            state: station.location?.state || 'N/A',
+            pincode: station.location?.pincode || 'N/A',
+            coordinates: station.location?.coordinates || null
+          },
           status: station.operational?.isActive ? 'active' : 'inactive',
           totalChargers: station.capacity?.totalChargers || 0,
           availableChargers: station.capacity?.chargers?.filter(c => c.isAvailable).length || 0,
           chargerTypes: station.capacity?.chargerTypes || [],
-          basePrice: station.pricing?.basePricePerKwh || 0
+          chargers: station.capacity?.chargers || [],
+          basePrice: station.pricing?.basePricePerKwh || 0,
+          pricing: station.pricing || {},
+          amenities: station.amenities || [],
+          contact: station.contact || {},
+          operational: station.operational || {},
+          analytics: station.analytics || {},
+          images: station.images || [],
+          createdAt: station.createdAt,
+          updatedAt: station.updatedAt
         })),
         todayBookings: todayBookings.map(booking => ({
           id: booking._id,
@@ -200,7 +217,7 @@ export const getDashboardData = async (req, res) => {
 // Get bookings for assigned stations
 export const getBookings = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub;
     const { status, date } = req.query;
     
     // Get user's assigned stations
@@ -274,7 +291,7 @@ export const updateBookingStatus = async (req, res) => {
     }
 
     // Check if station manager has access to this booking's station
-    const userId = req.user.id;
+    const userId = req.user.sub;
     const user = await User.findById(userId);
     const assignedStations = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
     
@@ -309,7 +326,7 @@ export const updateBookingStatus = async (req, res) => {
 // Get performance reports
 export const getReports = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub;
     
     // Get user's assigned stations
     const user = await User.findById(userId);

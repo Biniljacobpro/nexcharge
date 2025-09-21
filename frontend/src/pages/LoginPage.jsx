@@ -120,6 +120,13 @@ const LoginPage = () => {
         } else {
           next = '/franchise/dashboard';
         }
+      } else if (data?.user?.role === 'station_manager') {
+        // If backend signals password change required, redirect to station manager password reset
+        if (data?.user?.credentials?.mustChangePassword) {
+          next = '/station-manager/password-reset';
+        } else {
+          next = '/station-manager/dashboard';
+        }
       }
       
       setTimeout(() => navigate(next), 600);

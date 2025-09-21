@@ -7,8 +7,8 @@ import bcrypt from 'bcryptjs';
 // Helper function to get franchise ID from user
 const getFranchiseIdFromUser = async (req) => {
   try {
-    console.log('Getting franchise ID for user:', req.user.sub || req.user.id);
-    const user = await User.findById(req.user.sub || req.user.id);
+    console.log('Getting franchise ID for user:', req.user.sub || req.user.sub);
+    const user = await User.findById(req.user.sub || req.user.sub);
     console.log('User found:', user ? 'Yes' : 'No');
     console.log('User role:', user?.role);
     console.log('Franchise owner info:', user?.roleSpecificData?.franchiseOwnerInfo);
@@ -32,7 +32,7 @@ export const testEndpoint = async (req, res) => {
 export const getDashboardData = async (req, res) => {
   try {
     console.log('Franchise owner dashboard request:', req.user);
-    const user = await User.findById(req.user.sub || req.user.id);
+    const user = await User.findById(req.user.sub || req.user.sub);
     console.log('User found:', user ? 'Yes' : 'No');
     console.log('User role:', user?.role);
     console.log('Franchise owner info:', user?.roleSpecificData?.franchiseOwnerInfo);
@@ -44,7 +44,7 @@ export const getDashboardData = async (req, res) => {
         success: false, 
         message: 'Franchise not found. Please contact your corporate admin to assign you to a franchise.',
         debug: {
-          userId: req.user.sub || req.user.id,
+          userId: req.user.sub || req.user.sub,
           userRole: user?.role,
           franchiseOwnerInfo: user?.roleSpecificData?.franchiseOwnerInfo
         }
@@ -124,13 +124,32 @@ export const getDashboardData = async (req, res) => {
       role: 'station_manager',
       'roleSpecificData.stationManagerInfo.franchiseId': franchiseId
     }).select('personalInfo credentials roleSpecificData.stationManagerInfo');
-    const stationManagers = stationManagersDocs.map(m => ({
-      id: m._id,
-      name: `${m.personalInfo.firstName} ${m.personalInfo.lastName}`.trim(),
-      email: m.personalInfo.email,
-      phone: m.personalInfo.phone,
-      assignedStations: m.roleSpecificData?.stationManagerInfo?.assignedStations?.length || 0,
-      status: m.credentials?.isActive ? 'Active' : 'Inactive'
+    
+    // Get assigned stations for each manager
+    const stationManagers = await Promise.all(stationManagersDocs.map(async (m) => {
+      const assignedStationIds = m.roleSpecificData?.stationManagerInfo?.assignedStations || [];
+      const assignedStations = await Station.find({
+        _id: { $in: assignedStationIds },
+        franchiseId: franchiseId
+      }).select('name code location.address location.city managerId');
+
+      return {
+        id: m._id,
+        name: `${m.personalInfo.firstName} ${m.personalInfo.lastName}`.trim(),
+        email: m.personalInfo.email,
+        phone: m.personalInfo.phone,
+        assignedStations: assignedStations.map(station => ({
+          id: station._id,
+          _id: station._id,
+          name: station.name,
+          code: station.code,
+          address: station.location?.address || station.address || '',
+          city: station.location?.city || '',
+          managerId: station.managerId
+        })),
+        assignedStationsCount: assignedStations.length,
+        status: m.credentials?.isActive ? 'Active' : 'Inactive'
+      };
     }));
 
     // Sample promotions data
@@ -272,6 +291,7 @@ export const getStations = async (req, res) => {
       success: true,
       data: stations.map(station => ({
         id: station._id,
+        _id: station._id,
         name: station.name,
         code: station.code,
         description: station.description,
@@ -283,6 +303,7 @@ export const getStations = async (req, res) => {
         analytics: station.analytics,
         amenities: station.amenities,
         images: station.images,
+        managerId: station.managerId,
         manager: station.managerId ? {
           id: station.managerId._id,
           name: `${station.managerId.personalInfo.firstName} ${station.managerId.personalInfo.lastName}`,
@@ -471,7 +492,7 @@ export const addStation = async (req, res) => {
       managerId: managerId,
       amenities: Array.isArray(amenities) ? amenities.filter(a => a?.trim()) : [],
       images: Array.isArray(images) ? images.filter(i => i?.trim()) : [],
-      createdBy: req.user.sub || req.user.id
+      createdBy: req.user.sub || req.user.sub
     };
 
     const station = await Station.create(stationData);
@@ -573,7 +594,7 @@ export const updateStation = async (req, res) => {
 
     // Build update data object
     const updateData = {
-      updatedBy: req.user.sub || req.user.id
+      updatedBy: req.user.sub || req.user.sub
     };
 
     // Update basic info
@@ -1117,7 +1138,7 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.sub);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -1135,7 +1156,7 @@ export const changePassword = async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, 12);
 
     // Update password
-    await User.findByIdAndUpdate(req.user.id, {
+    await User.findByIdAndUpdate(req.user.sub, {
       'credentials.passwordHash': hashedNewPassword,
       'credentials.mustChangePassword': false
     });
@@ -1165,7 +1186,7 @@ export const updateProfile = async (req, res) => {
     if (pincode) updateData['personalInfo.pincode'] = pincode.trim();
 
     const user = await User.findByIdAndUpdate(
-      req.user.id,
+      req.user.sub,
       updateData,
       { new: true }
     );
@@ -1180,6 +1201,185 @@ export const updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating profile:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Assign station to manager
+export const assignStationToManager = async (req, res) => {
+  try {
+    const franchiseId = await getFranchiseIdFromUser(req);
+    if (!franchiseId) {
+      return res.status(403).json({ success: false, message: 'Franchise not found' });
+    }
+
+    const { managerId, stationId } = req.body;
+    console.log('Assigning station:', stationId, 'to manager:', managerId);
+
+    // Validate inputs
+    if (!managerId || !stationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Manager ID and Station ID are required' 
+      });
+    }
+
+    // Find the manager and verify they belong to this franchise
+    const manager = await User.findOne({
+      _id: managerId,
+      role: 'station_manager',
+      'roleSpecificData.stationManagerInfo.franchiseId': franchiseId
+    });
+
+    if (!manager) {
+      return res.status(404).json({ success: false, message: 'Station manager not found' });
+    }
+
+    // Find the station and verify it belongs to this franchise
+    const station = await Station.findOne({
+      _id: stationId,
+      franchiseId: franchiseId
+    });
+
+    if (!station) {
+      return res.status(404).json({ success: false, message: 'Station not found' });
+    }
+
+    console.log('Current station managerId:', station.managerId);
+
+    // Check if station is already assigned to another manager
+    if (station.managerId && station.managerId.toString() !== managerId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Station is already assigned to another manager' 
+      });
+    }
+
+    // Unassign station from current manager if any
+    if (station.managerId) {
+      await User.findByIdAndUpdate(station.managerId, {
+        $pull: { 'roleSpecificData.stationManagerInfo.assignedStations': stationId }
+      });
+    }
+
+    // Assign station to new manager
+    await Station.findByIdAndUpdate(stationId, { managerId: managerId });
+
+    // Add station to manager's assigned stations
+    await User.findByIdAndUpdate(managerId, {
+      $addToSet: { 'roleSpecificData.stationManagerInfo.assignedStations': stationId }
+    });
+
+    console.log('Station assigned successfully');
+    res.json({ success: true, message: 'Station assigned to manager successfully' });
+  } catch (error) {
+    console.error('Error assigning station to manager:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Unassign station from manager
+export const unassignStationFromManager = async (req, res) => {
+  try {
+    const franchiseId = await getFranchiseIdFromUser(req);
+    if (!franchiseId) {
+      return res.status(403).json({ success: false, message: 'Franchise not found' });
+    }
+
+    const { managerId, stationId } = req.body;
+    console.log('Unassigning station:', stationId, 'from manager:', managerId);
+
+    // Validate inputs
+    if (!managerId || !stationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Manager ID and Station ID are required' 
+      });
+    }
+
+    // Find the manager and verify they belong to this franchise
+    const manager = await User.findOne({
+      _id: managerId,
+      role: 'station_manager',
+      'roleSpecificData.stationManagerInfo.franchiseId': franchiseId
+    });
+
+    if (!manager) {
+      return res.status(404).json({ success: false, message: 'Station manager not found' });
+    }
+
+    // Find the station and verify it belongs to this franchise
+    const station = await Station.findOne({
+      _id: stationId,
+      franchiseId: franchiseId
+    });
+
+    if (!station) {
+      return res.status(404).json({ success: false, message: 'Station not found' });
+    }
+
+    console.log('Current station managerId:', station.managerId);
+
+    // Unassign station from manager
+    await Station.findByIdAndUpdate(stationId, { $unset: { managerId: 1 } });
+
+    // Remove station from manager's assigned stations
+    await User.findByIdAndUpdate(managerId, {
+      $pull: { 'roleSpecificData.stationManagerInfo.assignedStations': stationId }
+    });
+
+    console.log('Station unassigned successfully');
+    res.json({ success: true, message: 'Station unassigned from manager successfully' });
+  } catch (error) {
+    console.error('Error unassigning station from manager:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Get available station managers for assignment
+export const getAvailableStationManagers = async (req, res) => {
+  try {
+    const franchiseId = await getFranchiseIdFromUser(req);
+    if (!franchiseId) {
+      return res.status(403).json({ success: false, message: 'Franchise not found' });
+    }
+
+    const managers = await User.find({
+      role: 'station_manager',
+      'roleSpecificData.stationManagerInfo.franchiseId': franchiseId
+    }).select('personalInfo.firstName personalInfo.lastName personalInfo.email roleSpecificData.stationManagerInfo.assignedStations');
+
+    res.json({ success: true, data: managers });
+  } catch (error) {
+    console.error('Error getting available station managers:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Get unassigned stations
+export const getUnassignedStations = async (req, res) => {
+  try {
+    const franchiseId = await getFranchiseIdFromUser(req);
+    if (!franchiseId) {
+      return res.status(403).json({ success: false, message: 'Franchise not found' });
+    }
+
+    console.log('Getting unassigned stations for franchise:', franchiseId);
+    
+    const stations = await Station.find({
+      franchiseId: franchiseId,
+      $or: [
+        { managerId: { $exists: false } },
+        { managerId: null }
+      ]
+    }).select('name code location.address location.city');
+
+    console.log('Found unassigned stations:', stations.length);
+    console.log('Unassigned stations data:', stations);
+
+    res.json({ success: true, data: stations });
+  } catch (error) {
+    console.error('Error getting unassigned stations:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

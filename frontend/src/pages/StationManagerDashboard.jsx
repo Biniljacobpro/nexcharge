@@ -156,12 +156,83 @@ const StationManagerDashboard = () => {
     console.log('Edit booking:', booking);
   };
 
+  const handleApproveBooking = async (bookingId) => {
+    try {
+      // TODO: Implement approve booking API call
+      console.log('Approve booking:', bookingId);
+      setSnackbar({ open: true, message: 'Booking approved successfully', severity: 'success' });
+      loadDashboardData();
+    } catch (error) {
+      console.error('Error approving booking:', error);
+      setSnackbar({ open: true, message: 'Failed to approve booking', severity: 'error' });
+    }
+  };
+
+  const handleCancelBooking = async (bookingId) => {
+    try {
+      // TODO: Implement cancel booking API call
+      console.log('Cancel booking:', bookingId);
+      setSnackbar({ open: true, message: 'Booking cancelled successfully', severity: 'success' });
+      loadDashboardData();
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      setSnackbar({ open: true, message: 'Failed to cancel booking', severity: 'error' });
+    }
+  };
+
+  const handleScheduleMaintenance = () => {
+    // TODO: Implement schedule maintenance dialog
+    console.log('Schedule maintenance');
+  };
+
+  const handleEditMaintenance = (maintenanceId) => {
+    // TODO: Implement edit maintenance dialog
+    console.log('Edit maintenance:', maintenanceId);
+  };
+
+  const handleCancelMaintenance = async (maintenanceId) => {
+    try {
+      // TODO: Implement cancel maintenance API call
+      console.log('Cancel maintenance:', maintenanceId);
+      setSnackbar({ open: true, message: 'Maintenance cancelled successfully', severity: 'success' });
+      loadDashboardData();
+    } catch (error) {
+      console.error('Error cancelling maintenance:', error);
+      setSnackbar({ open: true, message: 'Failed to cancel maintenance', severity: 'error' });
+    }
+  };
+
+  const handleUpdatePricing = (stationId) => {
+    // TODO: Implement update pricing dialog
+    console.log('Update pricing for station:', stationId);
+  };
+
+  const handleCreatePromotion = () => {
+    // TODO: Implement create promotion dialog
+    console.log('Create promotion');
+  };
+
+  const handleBulkUpdatePricing = () => {
+    // TODO: Implement bulk update pricing dialog
+    console.log('Bulk update pricing');
+  };
+
+  const handleRespondToFeedback = (feedbackId) => {
+    // TODO: Implement respond to feedback dialog
+    console.log('Respond to feedback:', feedbackId);
+  };
+
+  const handleViewFeedbackDetails = (feedbackId) => {
+    // TODO: Implement view feedback details dialog
+    console.log('View feedback details:', feedbackId);
+  };
+
   const renderOverview = () => (
     <Box>
-      <Typography variant="h4" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+      <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
         Station Dashboard
       </Typography>
-      <Typography variant="subtitle1" sx={{ color: '#636e72', mb: 3 }}>
+      <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
         Real-time monitoring of your assigned charging station
       </Typography>
 
@@ -169,7 +240,7 @@ const StationManagerDashboard = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #00b894, #00a085)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #00E6B6, #00B894)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -189,7 +260,7 @@ const StationManagerDashboard = () => {
 
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #0984e3, #74b9ff)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #2D5A87, #4A7BA7)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -209,7 +280,7 @@ const StationManagerDashboard = () => {
 
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #e17055, #fdcb6e)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #F59E0B, #FBBF24)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -229,7 +300,7 @@ const StationManagerDashboard = () => {
 
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -254,46 +325,140 @@ const StationManagerDashboard = () => {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+                <Typography variant="h6" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
                   Assigned Stations ({dashboardData?.assignedStations?.length || 0})
                 </Typography>
                 {dashboardData?.assignedStations?.map((station, index) => (
-                  <Box key={station.id} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <StationIcon fontSize="small" color="primary" />
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {station.name}
-                      </Typography>
+                  <Box key={station.id} sx={{ mb: 3, p: 3, border: '1px solid', borderColor: 'grey.200', borderRadius: 2, backgroundColor: 'grey.50' }}>
+                    {/* Station Header */}
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <StationIcon fontSize="small" color="primary" />
+                        <Typography variant="h6" fontWeight="bold">
+                          {station.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          ({station.code})
+                        </Typography>
+                      </Box>
                       <Chip 
                         label={station.status} 
                         color={station.status === 'active' ? 'success' : 'warning'} 
                         size="small" 
                       />
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+
+                    {/* Station Description */}
+                    {station.description && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {station.description}
+                      </Typography>
+                    )}
+
+                    {/* Location Details */}
+                    <Box display="flex" alignItems="center" gap={1} mb={2}>
                       <LocationOn fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        {station.location}
-                      </Typography>
-                    </Box>
-                    <Box display="flex" alignItems="center" gap={2} mb={1}>
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <LocalParking fontSize="small" color="action" />
-                        <Typography variant="body2" color="text.secondary">
-                          {station.availableChargers}/{station.totalChargers} Available
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          {station.location?.address}
                         </Typography>
-                      </Box>
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <AttachMoney fontSize="small" color="action" />
                         <Typography variant="body2" color="text.secondary">
-                          ₹{station.basePrice}/kWh
+                          {station.location?.city}, {station.location?.state} - {station.location?.pincode}
                         </Typography>
                       </Box>
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Typography variant="body2" color="text.secondary">
-                        Charger Types: {station.chargerTypes?.join(', ') || 'N/A'}
-                      </Typography>
+
+                    {/* Charger Information */}
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                      <Grid item xs={12} sm={6}>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <LocalParking fontSize="small" color="action" />
+                          <Typography variant="body2" color="text.secondary">
+                            <strong>{station.availableChargers}/{station.totalChargers}</strong> Chargers Available
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <AttachMoney fontSize="small" color="action" />
+                          <Typography variant="body2" color="text.secondary">
+                            <strong>₹{station.basePrice}/kWh</strong> Base Rate
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    </Grid>
+
+                    {/* Charger Types */}
+                    {station.chargerTypes && station.chargerTypes.length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          <strong>Charger Types:</strong>
+                        </Typography>
+                        <Box display="flex" gap={1} flexWrap="wrap">
+                          {station.chargerTypes.map((type, idx) => (
+                            <Chip key={idx} label={type} size="small" variant="outlined" />
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+
+                    {/* Amenities */}
+                    {station.amenities && station.amenities.length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          <strong>Amenities:</strong>
+                        </Typography>
+                        <Box display="flex" gap={1} flexWrap="wrap">
+                          {station.amenities.map((amenity, idx) => (
+                            <Chip key={idx} label={amenity} size="small" color="primary" variant="outlined" />
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+
+                    {/* Contact Information */}
+                    {station.contact && (station.contact.phone || station.contact.email) && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          <strong>Contact:</strong>
+                        </Typography>
+                        <Box display="flex" gap={2}>
+                          {station.contact.phone && (
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <Phone fontSize="small" color="action" />
+                              <Typography variant="body2" color="text.secondary">
+                                {station.contact.phone}
+                              </Typography>
+                            </Box>
+                          )}
+                          {station.contact.email && (
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <Email fontSize="small" color="action" />
+                              <Typography variant="body2" color="text.secondary">
+                                {station.contact.email}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+
+                    {/* Operational Status */}
+                    <Box display="flex" alignItems="center" gap={2}>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Power fontSize="small" color={station.operational?.isActive ? 'success' : 'error'} />
+                        <Typography variant="body2" color="text.secondary">
+                          {station.operational?.isActive ? 'Operational' : 'Offline'}
+                        </Typography>
+                      </Box>
+                      {station.operational?.lastMaintenance && (
+                        <Box display="flex" alignItems="center" gap={0.5}>
+                          <Schedule fontSize="small" color="action" />
+                          <Typography variant="body2" color="text.secondary">
+                            Last Maintenance: {new Date(station.operational.lastMaintenance).toLocaleDateString()}
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
                   </Box>
                 )) || (
@@ -310,7 +475,7 @@ const StationManagerDashboard = () => {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+                <Typography variant="h6" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
                   Quick Actions
                 </Typography>
                 <Box display="flex" flexDirection="column" gap={2}>
@@ -339,10 +504,10 @@ const StationManagerDashboard = () => {
       case 'bookings':
         return (
           <Box>
-            <Typography variant="h4" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
               Booking Management
             </Typography>
-            <Typography variant="subtitle1" sx={{ color: '#636e72', mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
               Monitor and manage reservations for your assigned stations
             </Typography>
             
@@ -398,20 +563,38 @@ const StationManagerDashboard = () => {
                             />
                           </TableCell>
                           <TableCell>
-                            <Button 
-                              size="small" 
-                              startIcon={<ViewIcon />}
-                              onClick={() => handleViewBooking(booking)}
-                            >
-                              View
-                            </Button>
-                            <Button 
-                              size="small" 
-                              startIcon={<EditIcon />}
-                              onClick={() => handleEditBooking(booking)}
-                            >
-                              Edit
-                            </Button>
+                            <Box display="flex" gap={1}>
+                              <Button 
+                                size="small" 
+                                startIcon={<ViewIcon />}
+                                onClick={() => handleViewBooking(booking)}
+                                variant="outlined"
+                              >
+                                View
+                              </Button>
+                              {booking.status === 'pending' && (
+                                <Button 
+                                  size="small" 
+                                  startIcon={<CheckCircle />}
+                                  onClick={() => handleApproveBooking(booking.id)}
+                                  color="success"
+                                  variant="contained"
+                                >
+                                  Approve
+                                </Button>
+                              )}
+                              {booking.status !== 'cancelled' && booking.status !== 'completed' && (
+                                <Button 
+                                  size="small" 
+                                  startIcon={<DeleteIcon />}
+                                  onClick={() => handleCancelBooking(booking.id)}
+                                  color="error"
+                                  variant="outlined"
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                            </Box>
                           </TableCell>
                         </TableRow>
                       )) || []}
@@ -494,23 +677,35 @@ const StationManagerDashboard = () => {
       case 'maintenance':
         return (
           <Box>
-            <Typography variant="h4" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
               Maintenance Scheduling
             </Typography>
-            <Typography variant="subtitle1" sx={{ color: '#636e72', mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
               Block slots during repairs and maintenance
             </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <Typography variant="h6">Upcoming Maintenance</Typography>
+              <Button 
+                variant="contained" 
+                startIcon={<AddIcon />}
+                onClick={handleScheduleMaintenance}
+                sx={{ backgroundColor: 'primary.main', '&:hover': { backgroundColor: 'primary.dark' } }}
+              >
+                Schedule Maintenance
+              </Button>
+            </Box>
+            
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>Upcoming Maintenance</Typography>
                 <TableContainer>
                   <Table>
                     <TableHead>
                       <TableRow>
                         <TableCell>Type</TableCell>
                         <TableCell>Station</TableCell>
-                        <TableCell>Date</TableCell>
+                        <TableCell>Date & Time</TableCell>
                         <TableCell>Duration</TableCell>
+                        <TableCell>Description</TableCell>
                         <TableCell>Status</TableCell>
                         <TableCell>Actions</TableCell>
                       </TableRow>
@@ -518,20 +713,70 @@ const StationManagerDashboard = () => {
                     <TableBody>
                       {dashboardData?.maintenanceSchedule?.map((maintenance) => (
                         <TableRow key={maintenance.id}>
-                          <TableCell>{maintenance.type}</TableCell>
-                          <TableCell>{maintenance.stationName}</TableCell>
-                          <TableCell>{new Date(maintenance.date).toLocaleDateString()}</TableCell>
-                          <TableCell>{maintenance.duration}</TableCell>
+                          <TableCell>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <MaintenanceIcon fontSize="small" color="action" />
+                              <Typography variant="body2" fontWeight="medium">
+                                {maintenance.type}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="medium">
+                              {maintenance.station}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {new Date(maintenance.scheduledDate).toLocaleDateString()}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(maintenance.scheduledDate).toLocaleTimeString()}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {maintenance.duration}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">
+                              {maintenance.description}
+                            </Typography>
+                          </TableCell>
                           <TableCell>
                             <Chip 
                               label={maintenance.status} 
-                              color={maintenance.status === 'Scheduled' ? 'success' : 'warning'} 
+                              color={
+                                maintenance.status === 'scheduled' ? 'success' : 
+                                maintenance.status === 'in-progress' ? 'warning' : 
+                                maintenance.status === 'completed' ? 'info' : 'default'
+                              } 
                               size="small" 
                             />
                           </TableCell>
                           <TableCell>
-                            <Button size="small" startIcon={<EditIcon />}>Edit</Button>
-                            <Button size="small" startIcon={<DeleteIcon />} color="error">Cancel</Button>
+                            <Box display="flex" gap={1}>
+                              <Button 
+                                size="small" 
+                                startIcon={<EditIcon />}
+                                onClick={() => handleEditMaintenance(maintenance.id)}
+                                variant="outlined"
+                              >
+                                Edit
+                              </Button>
+                              {maintenance.status === 'scheduled' && (
+                                <Button 
+                                  size="small" 
+                                  startIcon={<DeleteIcon />} 
+                                  color="error"
+                                  onClick={() => handleCancelMaintenance(maintenance.id)}
+                                  variant="outlined"
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                            </Box>
                           </TableCell>
                         </TableRow>
                       )) || []}
@@ -545,10 +790,10 @@ const StationManagerDashboard = () => {
       case 'pricing':
         return (
           <Box>
-            <Typography variant="h4" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
               Pricing & Offers
             </Typography>
-            <Typography variant="subtitle1" sx={{ color: '#636e72', mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
               Set station-level pricing and promotions
             </Typography>
             
@@ -557,7 +802,7 @@ const StationManagerDashboard = () => {
               <CardContent>
                 <Typography variant="h6" gutterBottom>Current Station Pricing</Typography>
                 {dashboardData?.assignedStations?.map((station) => (
-                  <Box key={station.id} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                  <Box key={station.id} sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'grey.200', borderRadius: 1 }}>
                     <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
                       <Typography variant="subtitle1" fontWeight="bold">
                         {station.name}
@@ -595,10 +840,20 @@ const StationManagerDashboard = () => {
                       </Box>
                     </Box>
                     <Box display="flex" gap={1} mt={2}>
-                      <Button size="small" startIcon={<EditIcon />}>
+                      <Button 
+                        size="small" 
+                        startIcon={<EditIcon />}
+                        onClick={() => handleUpdatePricing(station.id)}
+                        variant="contained"
+                        color="primary"
+                      >
                         Update Pricing
                       </Button>
-                      <Button size="small" startIcon={<ViewIcon />}>
+                      <Button 
+                        size="small" 
+                        startIcon={<ViewIcon />}
+                        variant="outlined"
+                      >
                         View Details
                       </Button>
                     </Box>
@@ -618,14 +873,26 @@ const StationManagerDashboard = () => {
                 <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                   Manage pricing strategies, discounts, and promotional offers for your assigned stations.
                 </Typography>
-                <Box display="flex" gap={2}>
-                  <Button variant="contained" startIcon={<AddIcon />}>
+                <Box display="flex" gap={2} flexWrap="wrap">
+                  <Button 
+                    variant="contained" 
+                    startIcon={<AddIcon />}
+                    onClick={handleCreatePromotion}
+                    sx={{ backgroundColor: 'primary.main', '&:hover': { backgroundColor: 'primary.dark' } }}
+                  >
                     Create Promotion
                   </Button>
-                  <Button variant="outlined" startIcon={<EditIcon />}>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<EditIcon />}
+                    onClick={handleBulkUpdatePricing}
+                  >
                     Bulk Update Pricing
                   </Button>
-                  <Button variant="outlined" startIcon={<ViewIcon />}>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<ViewIcon />}
+                  >
                     View Pricing History
                   </Button>
                 </Box>
@@ -636,10 +903,10 @@ const StationManagerDashboard = () => {
       case 'reports':
         return (
           <Box>
-            <Typography variant="h4" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
               Performance Reports
             </Typography>
-            <Typography variant="subtitle1" sx={{ color: '#636e72', mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
               Utilization rates, uptime, and user ratings
             </Typography>
             
@@ -718,13 +985,73 @@ const StationManagerDashboard = () => {
               </Grid>
             </Grid>
 
+            {/* Performance Charts */}
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>Utilization Trends</Typography>
+                    <Box height={300}>
+                      <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 10 }}>
+                        Utilization chart will be displayed here
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>Revenue Analysis</Typography>
+                    <Box height={300}>
+                      <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 10 }}>
+                        Revenue chart will be displayed here
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {/* Station Performance Summary */}
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Station Performance Summary</Typography>
-                <Typography variant="body1" color="text.secondary">
-                  Detailed performance analytics and reporting features will be implemented here.
-                  This will include utilization charts, revenue trends, and customer satisfaction metrics.
-                </Typography>
+                <Grid container spacing={2}>
+                  {dashboardData?.assignedStations?.map((station) => (
+                    <Grid item xs={12} sm={6} md={4} key={station.id}>
+                      <Box sx={{ p: 2, border: '1px solid', borderColor: 'grey.200', borderRadius: 1 }}>
+                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                          {station.name}
+                        </Typography>
+                        <Box display="flex" justifyContent="space-between" mb={1}>
+                          <Typography variant="body2" color="text.secondary">Utilization:</Typography>
+                          <Typography variant="body2" fontWeight="bold">
+                            {station.analytics?.utilizationRate || 0}%
+                          </Typography>
+                        </Box>
+                        <Box display="flex" justifyContent="space-between" mb={1}>
+                          <Typography variant="body2" color="text.secondary">Rating:</Typography>
+                          <Typography variant="body2" fontWeight="bold">
+                            {station.analytics?.averageRating || 0}/5
+                          </Typography>
+                        </Box>
+                        <Box display="flex" justifyContent="space-between" mb={1}>
+                          <Typography variant="body2" color="text.secondary">Sessions:</Typography>
+                          <Typography variant="body2" fontWeight="bold">
+                            {station.analytics?.totalSessions || 0}
+                          </Typography>
+                        </Box>
+                        <Box display="flex" justifyContent="space-between">
+                          <Typography variant="body2" color="text.secondary">Revenue:</Typography>
+                          <Typography variant="body2" fontWeight="bold">
+                            ₹{station.analytics?.monthlyRevenue || 0}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Grid>
+                  )) || []}
+                </Grid>
               </CardContent>
             </Card>
           </Box>
@@ -732,10 +1059,10 @@ const StationManagerDashboard = () => {
       case 'feedback':
         return (
           <Box>
-            <Typography variant="h4" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
               Feedback Management
             </Typography>
-            <Typography variant="subtitle1" sx={{ color: '#636e72', mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
               View and respond to customer reviews
             </Typography>
             
@@ -745,7 +1072,7 @@ const StationManagerDashboard = () => {
                   Recent Customer Reviews ({dashboardData?.recentFeedback?.length || 0})
                 </Typography>
                 {dashboardData?.recentFeedback?.map((feedback) => (
-                  <Box key={feedback.id} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                  <Box key={feedback.id} sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'grey.200', borderRadius: 1 }}>
                     <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
                       <Typography variant="subtitle1" fontWeight="bold">
                         {feedback.user}
@@ -772,10 +1099,21 @@ const StationManagerDashboard = () => {
                       {feedback.comment}
                     </Typography>
                     <Box display="flex" gap={1}>
-                      <Button size="small" startIcon={<EditIcon />}>
+                      <Button 
+                        size="small" 
+                        startIcon={<EditIcon />}
+                        onClick={() => handleRespondToFeedback(feedback.id)}
+                        variant="contained"
+                        color="primary"
+                      >
                         Respond
                       </Button>
-                      <Button size="small" startIcon={<ViewIcon />}>
+                      <Button 
+                        size="small" 
+                        startIcon={<ViewIcon />}
+                        onClick={() => handleViewFeedbackDetails(feedback.id)}
+                        variant="outlined"
+                      >
                         View Details
                       </Button>
                     </Box>
@@ -792,10 +1130,10 @@ const StationManagerDashboard = () => {
       case 'profile':
         return (
           <Box>
-            <Typography variant="h4" gutterBottom sx={{ color: '#2d3436', fontWeight: 'bold' }}>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
               Profile Settings
             </Typography>
-            <Typography variant="subtitle1" sx={{ color: '#636e72', mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
               Manage account and preferences
             </Typography>
             <Card>
@@ -822,7 +1160,7 @@ const StationManagerDashboard = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
       {/* Sidebar */}
       <Drawer
         variant="permanent"
@@ -832,21 +1170,21 @@ const StationManagerDashboard = () => {
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            background: 'linear-gradient(180deg, #2d3436 0%, #636e72 100%)',
+            background: 'linear-gradient(180deg, #2D5A87 0%, #1E3A5F 100%)',
             color: 'white'
           },
           display: { xs: 'none', md: 'block' }
         }}
       >
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#00b894' }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
             NexCharge
           </Typography>
-          <Typography variant="body2" sx={{ color: '#bdc3c7' }}>
+          <Typography variant="body2" sx={{ color: 'grey.300' }}>
             Station Manager Portal
           </Typography>
         </Box>
-        <Divider sx={{ borderColor: '#636e72' }} />
+        <Divider sx={{ borderColor: 'grey.600' }} />
         <List>
           {navigationItems.map((item) => (
             <ListItem key={item.id} disablePadding>
@@ -855,13 +1193,13 @@ const StationManagerDashboard = () => {
                 onClick={() => setActiveSection(item.id)}
                 sx={{
                   '&.Mui-selected': {
-                    backgroundColor: '#00b894',
+                    backgroundColor: 'primary.main',
                     '&:hover': {
-                      backgroundColor: '#00a085'
+                      backgroundColor: 'primary.dark'
                     }
                   },
                   '&:hover': {
-                    backgroundColor: '#636e72'
+                    backgroundColor: 'grey.600'
                   }
                 }}
               >
@@ -871,7 +1209,7 @@ const StationManagerDashboard = () => {
                 <ListItemText 
                   primary={item.label} 
                   secondary={item.description}
-                  secondaryTypographyProps={{ fontSize: '0.75rem', color: '#bdc3c7' }}
+                  secondaryTypographyProps={{ fontSize: '0.75rem', color: 'grey.300' }}
                 />
               </ListItemButton>
             </ListItem>
@@ -889,19 +1227,19 @@ const StationManagerDashboard = () => {
               aria-label="open drawer"
               edge="start"
               onClick={handleDrawerToggle}
-              sx={{ mr: 2, color: '#2d3436', display: { md: 'none' } }}
+              sx={{ mr: 2, color: 'text.primary', display: { md: 'none' } }}
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1, color: '#2d3436' }}>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1, color: 'text.primary' }}>
               Station Manager Dashboard
             </Typography>
             <Box display="flex" alignItems="center" gap={2}>
-              <Typography variant="body2" sx={{ color: '#636e72' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Welcome, {user?.firstName || 'Manager'}
               </Typography>
-              <IconButton onClick={handleMenuClick} sx={{ color: '#2d3436' }}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: '#00b894' }}>
+              <IconButton onClick={handleMenuClick} sx={{ color: 'text.primary' }}>
+                <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
                   {user?.firstName?.charAt(0) || 'M'}
                 </Avatar>
               </IconButton>

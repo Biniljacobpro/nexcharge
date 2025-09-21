@@ -154,13 +154,14 @@ const FranchiseOwnerDashboard = () => {
     parkingFee: '',
     
     // Contact & Ownership
-    managerEmail: '',
     supportPhone: '',
     supportEmail: ''
   });
   const [stationLoading, setStationLoading] = useState(false);
   const [stations, setStations] = useState([]);
   const [stationsLoading, setStationsLoading] = useState(false);
+  const [availableManagers, setAvailableManagers] = useState([]);
+  const [managersLoading, setManagersLoading] = useState(false);
 
   // Station Manager management state
   const [managerDialog, setManagerDialog] = useState({ open: false, mode: 'add', manager: null });
@@ -173,12 +174,22 @@ const FranchiseOwnerDashboard = () => {
     stationId: ''
   });
   const [managerLoading, setManagerLoading] = useState(false);
+  const [unassignedStations, setUnassignedStations] = useState([]);
+  const [unassignedStationsLoading, setUnassignedStationsLoading] = useState(false);
 
   useEffect(() => {
     loadUserData();
     loadDashboardData();
     loadStations();
+    loadUnassignedStations();
   }, []);
+
+  // Refresh unassigned stations when switching to managers section
+  useEffect(() => {
+    if (activeSection === 'managers') {
+      loadUnassignedStations();
+    }
+  }, [activeSection]);
 
   const loadUserData = async () => {
     try {
@@ -241,7 +252,8 @@ const FranchiseOwnerDashboard = () => {
     try {
       setStationsLoading(true);
       const res = await franchiseOwnerService.getStations();
-      setStations(res?.data || res || []);
+      const stationsData = res?.data || res || [];
+      setStations(stationsData);
     } catch (error) {
       console.error('Error loading stations:', error);
       setSnackbar({ open: true, message: 'Failed to load stations', severity: 'error' });
@@ -462,6 +474,36 @@ const FranchiseOwnerDashboard = () => {
     </Box>
   );
 
+  // Load available station managers
+  const loadAvailableManagers = async () => {
+    try {
+      setManagersLoading(true);
+      const response = await franchiseOwnerService.getAvailableStationManagers();
+      if (response.success) {
+        setAvailableManagers(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading available managers:', error);
+    } finally {
+      setManagersLoading(false);
+    }
+  };
+
+  // Load unassigned stations
+  const loadUnassignedStations = async () => {
+    try {
+      setUnassignedStationsLoading(true);
+      const response = await franchiseOwnerService.getUnassignedStations();
+      if (response.success) {
+        setUnassignedStations(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading unassigned stations:', error);
+    } finally {
+      setUnassignedStationsLoading(false);
+    }
+  };
+
   // Station management functions
   const handleAddStation = () => {
     setStationForm({
@@ -490,7 +532,6 @@ const FranchiseOwnerDashboard = () => {
       status: 'active',
       parkingSlots: 1,
       parkingFee: '',
-      managerEmail: '',
       supportPhone: '',
       supportEmail: ''
     });
@@ -529,7 +570,6 @@ const FranchiseOwnerDashboard = () => {
       status: op.status || station.status || 'active',
       parkingSlots: op.parkingSlots ?? station.parkingSlots ?? 1,
       parkingFee: op.parkingFee ?? station.parkingFee ?? '',
-      managerEmail: contact.managerEmail || station.manager?.email || '',
       supportPhone: contact.supportPhone || station.supportPhone || '',
       supportEmail: contact.supportEmail || station.supportEmail || ''
     });
@@ -649,18 +689,20 @@ const FranchiseOwnerDashboard = () => {
       assignedStation: '',
       stationId: ''
     });
+    loadUnassignedStations();
     setManagerDialog({ open: true, mode: 'add', manager: null });
   };
 
   const handleEditManager = (manager) => {
     setManagerForm({
-      firstName: manager.firstName || '',
-      lastName: manager.lastName || '',
-      email: manager.email || '',
-      phone: manager.phone || '',
+      firstName: manager.personalInfo?.firstName || manager.firstName || '',
+      lastName: manager.personalInfo?.lastName || manager.lastName || '',
+      email: manager.personalInfo?.email || manager.email || '',
+      phone: manager.personalInfo?.phone || manager.phone || '',
       assignedStation: manager.assignedStation || manager.assignedStations?.[0]?.name || '',
       stationId: manager.stationId || manager.assignedStations?.[0]?.id || ''
     });
+    loadUnassignedStations();
     setManagerDialog({ open: true, mode: 'edit', manager });
   };
 
@@ -681,10 +723,6 @@ const FranchiseOwnerDashboard = () => {
         setSnackbar({ open: true, message: 'Email is required', severity: 'error' });
         return;
       }
-      if (!managerForm.assignedStation.trim()) {
-        setSnackbar({ open: true, message: 'Assigned station is required', severity: 'error' });
-        return;
-      }
 
       const managerData = {
         firstName: managerForm.firstName.trim(),
@@ -693,12 +731,29 @@ const FranchiseOwnerDashboard = () => {
         phone: managerForm.phone.replace(/\D/g, '')
       };
 
+      let manager;
       if (managerDialog.mode === 'add') {
-        await franchiseOwnerService.addStationManager(managerData);
+        manager = await franchiseOwnerService.addStationManager(managerData);
         setSnackbar({ open: true, message: 'Station manager added successfully', severity: 'success' });
       } else {
-        await franchiseOwnerService.updateStationManager(managerDialog.manager.id, managerData);
+        manager = await franchiseOwnerService.updateStationManager(managerDialog.manager.id, managerData);
         setSnackbar({ open: true, message: 'Station manager updated successfully', severity: 'success' });
+      }
+
+      // Handle station assignment if a station is selected
+      if (managerForm.assignedStation && managerForm.assignedStation !== 'unassigned') {
+        try {
+          const selectedStation = unassignedStations.find(s => s.name === managerForm.assignedStation);
+          if (selectedStation) {
+            await franchiseOwnerService.assignStationToManager(
+              manager.data?.id || manager.data?._id || managerDialog.manager.id,
+              selectedStation._id
+            );
+          }
+        } catch (error) {
+          console.error('Error assigning station to manager:', error);
+          setSnackbar({ open: true, message: 'Manager created but station assignment failed', severity: 'warning' });
+        }
       }
 
       setManagerDialog({ open: false, mode: 'add', manager: null });
@@ -720,6 +775,60 @@ const FranchiseOwnerDashboard = () => {
       } catch (error) {
         console.error('Error deleting station manager:', error);
         setSnackbar({ open: true, message: error.message || 'Failed to delete station manager', severity: 'error' });
+      }
+    }
+  };
+
+  // Handle station assignment to manager
+  const handleAssignStation = async (managerId, stationId) => {
+    if (!stationId) return;
+    
+    try {
+      await franchiseOwnerService.assignStationToManager(managerId, stationId);
+      setSnackbar({ open: true, message: 'Station assigned to manager successfully', severity: 'success' });
+      
+      // Update local state immediately
+      setStations(prevStations => 
+        prevStations.map(station => 
+          station._id === stationId || station.id === stationId 
+            ? { ...station, managerId: managerId }
+            : station
+        )
+      );
+      
+      // Refresh data
+      loadDashboardData();
+      loadStations();
+      loadUnassignedStations();
+    } catch (error) {
+      console.error('Error assigning station to manager:', error);
+      setSnackbar({ open: true, message: error.message || 'Failed to assign station to manager', severity: 'error' });
+    }
+  };
+
+  // Handle station unassignment from manager
+  const handleUnassignStation = async (managerId, stationId) => {
+    if (window.confirm('Are you sure you want to unassign this station from the manager?')) {
+      try {
+        await franchiseOwnerService.unassignStationFromManager(managerId, stationId);
+        setSnackbar({ open: true, message: 'Station unassigned from manager successfully', severity: 'success' });
+        
+        // Update local state immediately
+        setStations(prevStations => 
+          prevStations.map(station => 
+            station._id === stationId || station.id === stationId 
+              ? { ...station, managerId: null }
+              : station
+          )
+        );
+        
+        // Refresh data
+        loadDashboardData();
+        loadStations();
+        loadUnassignedStations();
+      } catch (error) {
+        console.error('Error unassigning station from manager:', error);
+        setSnackbar({ open: true, message: error.message || 'Failed to unassign station from manager', severity: 'error' });
       }
     }
   };
@@ -1234,17 +1343,6 @@ const FranchiseOwnerDashboard = () => {
                   <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
-                      label="Station Manager Email"
-                      type="email"
-                      value={stationForm.managerEmail}
-                      onChange={(e) => setStationForm({ ...stationForm, managerEmail: e.target.value })}
-                      disabled={stationDialog.mode === 'view'}
-                      helperText="Email of the assigned station manager"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
                       label="Support Phone Number"
                       value={stationForm.supportPhone}
                       onChange={(e) => setStationForm({ ...stationForm, supportPhone: e.target.value })}
@@ -1254,7 +1352,7 @@ const FranchiseOwnerDashboard = () => {
                       disabled={stationDialog.mode === 'view'}
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
                       label="Support Email"
@@ -1326,63 +1424,162 @@ const FranchiseOwnerDashboard = () => {
         </Button>
       </Box>
 
+      {/* Station Assignment Overview */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Station Assignment Overview
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box textAlign="center">
+                <Typography variant="h4" color="primary" fontWeight="bold">
+                  {stations?.length || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total Stations
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box textAlign="center">
+                <Typography variant="h4" color="success.main" fontWeight="bold">
+                  {dashboardData?.stationManagers?.reduce((total, manager) => total + (manager.assignedStationsCount || 0), 0) || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Assigned Stations
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box textAlign="center">
+                <Typography variant="h4" color="warning.main" fontWeight="bold">
+                  {(stations?.length || 0) - (dashboardData?.stationManagers?.reduce((total, manager) => total + (manager.assignedStationsCount || 0), 0) || 0)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Unassigned Stations
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box textAlign="center">
+                <Typography variant="h4" color="info.main" fontWeight="bold">
+                  {dashboardData?.stationManagers?.length || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total Managers
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
       {/* Station Managers List */}
       <Grid container spacing={2}>
-        {dashboardData?.stationManagers?.map((manager, index) => (
-          <Grid item xs={12} sm={6} md={4} key={index}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2} mb={2}>
-                    <Avatar sx={{ bgcolor: '#00b894' }}>
-                      {manager.name?.charAt(0) || 'M'}
-                    </Avatar>
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {manager.name || 'Manager Name'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {manager.email || 'manager@example.com'}
-                      </Typography>
+        {dashboardData?.stationManagers?.map((manager, index) => {
+          const assignedStations = manager.assignedStations || [];
+          return (
+            <Grid item xs={12} sm={6} md={4} key={index}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+              >
+                <Card>
+                  <CardContent>
+                    <Box display="flex" alignItems="center" gap={2} mb={2}>
+                      <Avatar sx={{ bgcolor: '#00b894' }}>
+                        {manager.name?.charAt(0) || 'M'}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {manager.name || 'Manager Name'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {manager.email || 'manager@example.com'}
+                        </Typography>
+                      </Box>
                     </Box>
-                  </Box>
-                  <Box sx={{ mb: 2 }}>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <EvStation fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        Station: {manager.assignedStation || 'Unassigned'}
+                    
+                    {/* Assigned Stations */}
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" fontWeight="bold" color="text.secondary" gutterBottom>
+                        Assigned Stations ({assignedStations.length})
                       </Typography>
+                      {assignedStations.length > 0 ? (
+                        <Box>
+                          {assignedStations.map((station, idx) => (
+                            <Chip
+                              key={idx}
+                              label={station.name}
+                              size="small"
+                              color="primary"
+                              sx={{ mr: 1, mb: 1 }}
+                              onDelete={() => handleUnassignStation(manager.id, station.id)}
+                            />
+                          ))}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          No stations assigned
+                        </Typography>
+                      )}
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <Phone fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        Phone: {manager.phone || 'N/A'}
-                      </Typography>
+
+                    <Box sx={{ mb: 2 }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={1}>
+                        <Phone fontSize="small" color="action" />
+                        <Typography variant="body2" color="text.secondary">
+                          Phone: {manager.phone || 'N/A'}
+                        </Typography>
+                      </Box>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <CheckCircle fontSize="small" color="success" />
+                        <Typography variant="body2" color="text.secondary">
+                          Status: {manager.status || 'Active'}
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <CheckCircle fontSize="small" color="success" />
-                      <Typography variant="body2" color="text.secondary">
-                        Status: {manager.status || 'Active'}
-                      </Typography>
+
+                    {/* Assignment Actions */}
+                    <Box display="flex" flexDirection="column" gap={1}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Assign Station</InputLabel>
+                        <Select
+                          value=""
+                          onChange={(e) => handleAssignStation(manager.id, e.target.value)}
+                          disabled={unassignedStationsLoading}
+                        >
+                          {unassignedStations.map((station) => (
+                            <MenuItem key={station._id} value={station._id}>
+                              {station.name} - {station.location?.address || station.address || ''}
+                            </MenuItem>
+                          ))}
+                          {unassignedStations.length === 0 && !unassignedStationsLoading && (
+                            <MenuItem disabled>No unassigned stations</MenuItem>
+                          )}
+                          {unassignedStationsLoading && (
+                            <MenuItem disabled>Loading stations...</MenuItem>
+                          )}
+                        </Select>
+                      </FormControl>
+                      
+                      <Box display="flex" gap={1}>
+                        <Button size="small" startIcon={<EditIcon />} onClick={() => handleEditManager(manager)}>
+                          Edit
+                        </Button>
+                        <Button size="small" startIcon={<DeleteIcon />} color="error" onClick={() => handleDeleteManager(manager.id)}>
+                          Remove
+                        </Button>
+                      </Box>
                     </Box>
-                  </Box>
-                  <Box display="flex" gap={1}>
-                    <Button size="small" startIcon={<EditIcon />} onClick={() => handleEditManager(manager)}>
-                      Edit
-                    </Button>
-                    <Button size="small" startIcon={<DeleteIcon />} color="error" onClick={() => handleDeleteManager(manager.id)}>
-                      Remove
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-        )) || []}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </Grid>
+          );
+        }) || []}
         
         {/* Empty state for managers */}
         {(!dashboardData?.stationManagers || dashboardData.stationManagers.length === 0) && (
@@ -1476,19 +1673,28 @@ const FranchiseOwnerDashboard = () => {
                 />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth required>
-                  <InputLabel>Assigned Station</InputLabel>
+                <FormControl fullWidth>
+                  <InputLabel>Assign Station</InputLabel>
                   <Select
                     value={managerForm.assignedStation}
                     onChange={(e) => setManagerForm({ ...managerForm, assignedStation: e.target.value })}
+                    disabled={unassignedStationsLoading}
                   >
-                    {(stations || []).map((station) => (
-                      <SelectMenuItem key={station.id || station._id} value={station.name}>
-                        {station.name} - {(station.location?.address || station.address || '')}
-                      </SelectMenuItem>
+                    <MenuItem value="unassigned">
+                      <em>Unassigned (Assign Later)</em>
+                    </MenuItem>
+                    {unassignedStations.map((station) => (
+                      <MenuItem key={station._id} value={station.name}>
+                        {station.name} - {station.location?.address || station.address || ''}
+                      </MenuItem>
                     ))}
-                    <SelectMenuItem value="unassigned">Unassigned (Assign Later)</SelectMenuItem>
                   </Select>
+                  {unassignedStationsLoading && (
+                    <Box display="flex" alignItems="center" gap={1} mt={1}>
+                      <CircularProgress size={16} />
+                      <Typography variant="caption">Loading stations...</Typography>
+                    </Box>
+                  )}
                 </FormControl>
               </Grid>
             </Grid>
