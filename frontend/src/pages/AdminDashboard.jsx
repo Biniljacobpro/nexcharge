@@ -597,7 +597,7 @@ const AdminDashboard = () => {
   const [vehicleActionError, setVehicleActionError] = useState('');
   const [vehicleActionSuccess, setVehicleActionSuccess] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('corporate-admins');
+  const [activeSection, setActiveSection] = useState('dashboard');
 
   // Connector types mapping
   const connectorTypes = [
@@ -646,7 +646,7 @@ const AdminDashboard = () => {
       console.log('Corporate Admins:', corpAdmins);
       
       setOverview(ov);
-      setUsers(userList);
+      setUsers((userList || []).filter((u) => u.role !== 'admin'));
       setCorporateAdmins(corpAdmins || []);
       setVehicles(vehicleList || []);
     } catch (e) {
