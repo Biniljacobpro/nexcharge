@@ -29,7 +29,11 @@ export const loginApi = async ({ email, password }) => {
     body: JSON.stringify({ email, password })
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Login failed');
+  if (!res.ok) {
+    const err = new Error(data.error || 'Login failed');
+    err.status = res.status;
+    throw err;
+  }
   setTokens(data);
   return data;
 };
@@ -133,6 +137,17 @@ export const addCorporateAdmin = async (corporateData) => {
   return data;
 };
 
+export const updateCorporateAdminStatusApi = async (id, isActive) => {
+  const res = await authFetch(`${API_BASE}/admin/corporate-admins/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isActive })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to update status');
+  return data;
+};
+
 // Profile API
 export const updateProfileApi = async (profileData) => {
   const res = await authFetch(`${API_BASE}/auth/profile`, {
@@ -142,6 +157,17 @@ export const updateProfileApi = async (profileData) => {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to update profile');
+  return data;
+};
+
+export const setUserVehicleApi = async ({ make, model, year, batteryCapacity, preferredChargingType, chargingAC, chargingDC, specifications }) => {
+  const res = await authFetch(`${API_BASE}/auth/user-vehicle`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ make, model, year, batteryCapacity, preferredChargingType, chargingAC, chargingDC, specifications })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update user vehicle');
   return data;
 };
 
@@ -271,10 +297,44 @@ export const updateVehicleApi = async (id, payload) => {
   return data;
 };
 
-export const deleteVehicleApi = async (id) => {
-  const res = await authFetch(`${API_BASE}/vehicles/${id}`, { method: 'DELETE' });
+export const deleteVehicleApi = async (id, hardDelete = false) => {
+  const res = await authFetch(`${API_BASE}/vehicles/${id}?hardDelete=${hardDelete ? 'true' : 'false'}`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || data.message || 'Failed to delete vehicle');
+  return data;
+};
+
+export const getModelsByMakeApi = async (make) => {
+  const url = `${API_BASE}/vehicles/models?make=${encodeURIComponent(make)}`;
+  const res = await authFetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to load models');
+  return data.data || [];
+};
+
+export const getCapacitiesByMakeModelApi = async (make, model) => {
+  const url = `${API_BASE}/vehicles/capacities?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}`;
+  const res = await authFetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to load capacities');
+  return data.data || [];
+};
+
+export const getMakesApi = async () => {
+  const url = `${API_BASE}/vehicles/makes`;
+  const res = await authFetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to load makes');
+  return data.data || [];
+};
+
+// Public stations listing
+export const getPublicStationsApi = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const url = `${API_BASE}/public/stations${qs ? `?${qs}` : ''}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to load stations');
   return data;
 };
 

@@ -133,6 +133,7 @@ const CorporateDashboard = () => {
     stationData: [],
     performanceMetrics: {}
   });
+  const [corporateStations, setCorporateStations] = useState([]);
 
   // Profile state
   const [user, setUser] = useState(null);
@@ -172,6 +173,7 @@ const CorporateDashboard = () => {
     loadFranchises();
     loadRecentBookings();
     loadAnalytics();
+    loadCorporateStations();
     loadUserProfile();
   }, []);
 
@@ -240,11 +242,26 @@ const CorporateDashboard = () => {
     }
   };
 
+  const loadCorporateStations = async () => {
+    try {
+      const res = await corporateService.getCorporateStations();
+      if (res.success) setCorporateStations(res.data || []);
+    } catch (error) {
+      console.error('Error loading stations:', error);
+    }
+  };
+
 
   const handleFranchiseDialog = (mode, franchise = null) => {
     setFranchiseDialog({ open: true, mode, franchise });
     if (mode === 'edit' && franchise) {
-      setFranchiseForm(franchise);
+      setFranchiseForm({
+        firstName: franchise.firstName || (franchise.name?.split(' ')[0] || ''),
+        lastName: franchise.lastName || (franchise.name?.split(' ').slice(1).join(' ') || ''),
+        email: franchise.email || '',
+        phone: franchise.phone || '',
+        franchiseName: franchise.franchiseName || franchise.name || ''
+      });
     } else {
       setFranchiseForm({
         firstName: '',
@@ -507,6 +524,79 @@ const CorporateDashboard = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Station Cards */}
+      <Box sx={{ mt: 3 }}>
+        <Grid container spacing={2}>
+          {corporateStations.map((s) => (
+            <Grid item xs={12} sm={6} md={4} key={s.id}>
+              <Card sx={{ height: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>{s.name || 'Unnamed Station'}</Typography>
+                      <Typography variant="caption" color="text.secondary">Code: {s.code || '-'}</Typography>
+                    </Box>
+                    <Chip size="small" label={s.status === 'offline' ? 'Offline' : 'Operational'} color={s.status === 'offline' ? 'warning' : 'success'} />
+                  </Box>
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
+                    {s.description || 'No description provided.'}
+                  </Typography>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Grid container spacing={1}>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary">Chargers</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>{s.totalChargers}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary">Base Price</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>₹{(s.basePrice || 0).toLocaleString()}</Typography>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary">Charger Types</Typography>
+                      <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {(s.chargerTypes || []).map((t) => (
+                          <Chip key={t} size="small" label={t} />
+                        ))}
+                        {(s.chargerTypes || []).length === 0 && (
+                          <Typography variant="caption" color="text.secondary">-</Typography>
+                        )}
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary">Amenities</Typography>
+                      <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {(s.amenities || []).map((a) => (
+                          <Chip key={a} size="small" label={a} color="info" variant="outlined" />
+                        ))}
+                        {(s.amenities || []).length === 0 && (
+                          <Typography variant="caption" color="text.secondary">-</Typography>
+                        )}
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary">Location</Typography>
+                      <Typography variant="body2">{[s.address, s.city, s.state, s.pincode].filter(Boolean).join(', ') || '-'}</Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+          {corporateStations.length === 0 && (
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="body2" color="text.secondary">No stations found for this corporate.</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+        </Grid>
+      </Box>
     </Box>
   );
 
@@ -664,6 +754,79 @@ const CorporateDashboard = () => {
               </Box>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Detailed station cards directly below overview/performance */}
+        <Grid item xs={12}>
+          <Grid container spacing={2}>
+            {corporateStations.map((s) => (
+              <Grid item xs={12} sm={6} md={4} key={s.id}>
+                <Card sx={{ height: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>{s.name || 'Unnamed Station'}</Typography>
+                        <Typography variant="caption" color="text.secondary">Code: {s.code || '-'}</Typography>
+                      </Box>
+                      <Chip size="small" label={s.status === 'offline' ? 'Offline' : 'Operational'} color={s.status === 'offline' ? 'warning' : 'success'} />
+                    </Box>
+
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
+                      {s.description || 'No description provided.'}
+                    </Typography>
+
+                    <Divider sx={{ my: 1.5 }} />
+
+                    <Grid container spacing={1}>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Chargers</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>{s.totalChargers}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Base Price</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>₹{(s.basePrice || 0).toLocaleString()}</Typography>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="caption" color="text.secondary">Charger Types</Typography>
+                        <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(s.chargerTypes || []).map((t) => (
+                            <Chip key={t} size="small" label={t} />
+                          ))}
+                          {(s.chargerTypes || []).length === 0 && (
+                            <Typography variant="caption" color="text.secondary">-</Typography>
+                          )}
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="caption" color="text.secondary">Amenities</Typography>
+                        <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(s.amenities || []).map((a) => (
+                            <Chip key={a} size="small" label={a} color="info" variant="outlined" />
+                          ))}
+                          {(s.amenities || []).length === 0 && (
+                            <Typography variant="caption" color="text.secondary">-</Typography>
+                          )}
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="caption" color="text.secondary">Location</Typography>
+                        <Typography variant="body2">{[s.address, s.city, s.state, s.pincode].filter(Boolean).join(', ') || '-'}</Typography>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+            {corporateStations.length === 0 && (
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">No stations found for this corporate.</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+          </Grid>
         </Grid>
       </Grid>
     </Box>
@@ -1164,6 +1327,7 @@ const CorporateDashboard = () => {
                 type="email"
                 value={franchiseForm.email}
                 onChange={(e) => setFranchiseForm({ ...franchiseForm, email: e.target.value })}
+                disabled={franchiseDialog.mode === 'edit'}
                 required
               />
             </Grid>

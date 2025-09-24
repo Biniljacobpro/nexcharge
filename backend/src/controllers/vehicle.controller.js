@@ -263,4 +263,70 @@ export const updateCompatibleStations = async (req, res) => {
   }
 };
 
+// GET /api/vehicles/models?make=Tesla - Get distinct models for a given make
+export const getModelsByMake = async (req, res) => {
+  try {
+    const { make } = req.query;
+    if (!make || !String(make).trim()) {
+      return res.status(400).json({ success: false, message: 'make is required' });
+    }
+    const makeStr = String(make).trim();
+    const rows = await Vehicle.aggregate([
+      { $match: { make: { $regex: `^${makeStr}$`, $options: 'i' } } },
+      { $group: { _id: '$model' } },
+      { $project: { _id: 0, model: '$_id' } },
+      { $sort: { model: 1 } }
+    ]);
+    const models = rows.map(r => r.model).filter(Boolean);
+    return res.json({ success: true, data: models });
+  } catch (error) {
+    console.error('Error fetching models by make:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// GET /api/vehicles/capacities?make=Tesla&model=Model 3 - Existing capacities for make+model
+export const getCapacitiesByMakeModel = async (req, res) => {
+  try {
+    const { make, model } = req.query;
+    if (!make || !model) {
+      return res.status(400).json({ success: false, message: 'make and model are required' });
+    }
+    const makeStr = String(make).trim();
+    const modelStr = String(model).trim();
+    const rows = await Vehicle.aggregate([
+      { $match: { 
+        make: { $regex: `^${makeStr}$`, $options: 'i' },
+        model: { $regex: `^${modelStr}$`, $options: 'i' },
+        batteryCapacity: { $type: 'number' }
+      } },
+      { $group: { _id: '$batteryCapacity' } },
+      { $project: { _id: 0, capacity: '$_id' } },
+      { $sort: { capacity: 1 } }
+    ]);
+    const capacities = rows.map(r => r.capacity).filter((n) => typeof n === 'number');
+    return res.json({ success: true, data: capacities });
+  } catch (error) {
+    console.error('Error fetching capacities by make & model:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// GET /api/vehicles/makes - Distinct makes from admin-added vehicles
+export const getMakes = async (req, res) => {
+  try {
+    const rows = await Vehicle.aggregate([
+      { $match: { make: { $type: 'string' } } },
+      { $group: { _id: { $toLower: '$make' }, original: { $first: '$make' } } },
+      { $replaceRoot: { newRoot: { make: '$original' } } },
+      { $sort: { make: 1 } }
+    ]);
+    const makes = rows.map(r => r.make).filter(Boolean);
+    return res.json({ success: true, data: makes });
+  } catch (error) {
+    console.error('Error fetching makes:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 

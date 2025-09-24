@@ -11,7 +11,8 @@ import {
   updatePassword,
   updateProfileImage,
   uploadProfileImage,
-  checkEmailAvailability
+  checkEmailAvailability,
+  updateUserVehicle
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middlewares/auth.js';
 import upload from '../middlewares/upload.js';
@@ -31,6 +32,7 @@ router.get('/check-email', checkEmailAvailability);
 
 // Profile management routes
 router.put('/profile', requireAuth, updateProfile);
+router.put('/user-vehicle', requireAuth, updateUserVehicle);
 router.put('/password', requireAuth, updatePassword);
 router.put('/profile-image', requireAuth, updateProfileImage);
 router.post('/upload-profile-image', requireAuth, upload.single('profileImage'), uploadProfileImage);

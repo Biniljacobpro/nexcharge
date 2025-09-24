@@ -15,7 +15,11 @@ import {
   Stack,
   Divider,
   Checkbox,
-  FormControlLabel
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -38,6 +42,7 @@ const LoginPage = () => {
   const [errors, setErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [deactivatedDialogOpen, setDeactivatedDialogOpen] = useState(false);
 
   const allowedDomains = useMemo(() => ['gmail.com', 'mca.ajce.in'], []);
   const emailFormatValid = useMemo(() => {
@@ -131,6 +136,10 @@ const LoginPage = () => {
       
       setTimeout(() => navigate(next), 600);
     } catch (e) {
+      if (e?.status === 403) {
+        setDeactivatedDialogOpen(true);
+        return;
+      }
       setErrors({ ...errors, password: e.message });
     }
   };
@@ -431,6 +440,17 @@ const LoginPage = () => {
       </Box>
 
       <Footer />
+      <Dialog open={deactivatedDialogOpen} onClose={() => setDeactivatedDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Account Deactivated</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Your account has been deactivated. Please contact the administrator.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeactivatedDialogOpen(false)} variant="contained">OK</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

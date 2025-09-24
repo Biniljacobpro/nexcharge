@@ -17,6 +17,7 @@ import StationManagerDashboard from './pages/StationManagerDashboard';
 import FirstLoginReset from './pages/FirstLoginReset';
 import StationManagerPasswordReset from './pages/StationManagerPasswordReset';
 import StationDetails from './pages/StationDetails';
+import StationsPage from './pages/StationsPage';
 import ForgotPassword from './pages/ForgotPassword';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/home" element={<UserHomePage />} />
+          <Route path="/stations" element={<StationsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/apply-corporate" element={<CorporateApplicationPage />} />
             <Route path="/corporate/dashboard" element={<CorporateDashboard />} />

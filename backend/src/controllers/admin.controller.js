@@ -206,6 +206,37 @@ export const addCorporateAdmin = async (req, res) => {
 	}
 };
 
+// Activate/Deactivate a corporate admin
+export const updateCorporateAdminStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive boolean is required' });
+    }
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.role !== 'corporate_admin') {
+      return res.status(400).json({ error: 'Only corporate admins can be updated with this endpoint' });
+    }
+
+    user.credentials.isActive = isActive;
+    await user.save();
+
+    return res.json({ success: true, user: {
+      _id: user._id,
+      role: user.role,
+      personalInfo: user.personalInfo,
+      credentials: { isActive: user.credentials?.isActive },
+      roleSpecificData: user.roleSpecificData,
+      createdAt: user.createdAt
+    }});
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to update status' });
+  }
+};
+
 // Helper function to generate secure password
 const generateSecurePassword = () => {
 	const length = 12;

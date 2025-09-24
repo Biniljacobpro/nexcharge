@@ -8,13 +8,19 @@ import {
   deleteVehicle,
   getCompatibleVehicles,
   getVehicleStats,
-  updateCompatibleStations
+  updateCompatibleStations,
+  getModelsByMake,
+  getCapacitiesByMakeModel,
+  getMakes
 } from '../controllers/vehicle.controller.js';
 
 const router = express.Router();
 
 // Public routes (for EV users)
 router.get('/compatible', getCompatibleVehicles);
+router.get('/models', getModelsByMake);
+router.get('/capacities', getCapacitiesByMakeModel);
+router.get('/makes', getMakes);
 
 // Admin routes
 router.use(requireAuth, requireRole('admin'));

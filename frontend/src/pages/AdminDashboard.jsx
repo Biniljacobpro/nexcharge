@@ -171,7 +171,7 @@ const ChartCard = ({ title, value, subtitle, change, status, children, actionIco
 );
 
 // Corporate Admin Management Section Component
-const CorporateAdminManagementSection = ({ admins, onRefresh }) => {
+const CorporateAdminManagementSection = ({ admins, onRefresh, onAddAdmin }) => {
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [reviewDialog, setReviewDialog] = useState(false);
   const [reviewData, setReviewData] = useState({ status: 'approved', notes: '' });
@@ -203,11 +203,11 @@ const CorporateAdminManagementSection = ({ admins, onRefresh }) => {
             </Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={onRefresh}
+                variant="contained"
+                startIcon={<PersonIcon />}
+                onClick={onAddAdmin}
               >
-                Refresh
+                Add Corporate Admin
               </Button>
             </Box>
           </Box>
@@ -225,7 +225,7 @@ const CorporateAdminManagementSection = ({ admins, onRefresh }) => {
           ) : (
             <TableContainer>
               <Table>
-                <TableHead>
+          <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
                     <TableCell>Company</TableCell>
@@ -233,7 +233,8 @@ const CorporateAdminManagementSection = ({ admins, onRefresh }) => {
                     <TableCell>Email</TableCell>
                     <TableCell>Phone</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Created</TableCell>
+              <TableCell>Created</TableCell>
+              <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -266,9 +267,27 @@ const CorporateAdminManagementSection = ({ admins, onRefresh }) => {
                       <TableCell>
                         {getActiveChip(adm.credentials?.isActive)}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{new Date(adm.createdAt).toLocaleDateString()}</Typography>
-                      </TableCell>
+              <TableCell>
+                <Typography variant="body2">{new Date(adm.createdAt).toLocaleDateString()}</Typography>
+              </TableCell>
+              <TableCell align="right">
+                <Button
+                  size="small"
+                  variant={adm.credentials?.isActive ? 'outlined' : 'contained'}
+                  color={adm.credentials?.isActive ? 'warning' : 'success'}
+                  onClick={async () => {
+                    try {
+                      await api.updateCorporateAdminStatusApi(adm._id, !adm.credentials?.isActive);
+                      await onRefresh();
+                    } catch (e) {
+                      console.error('Failed to update status', e);
+                      alert(e.message || 'Failed to update status');
+                    }
+                  }}
+                >
+                  {adm.credentials?.isActive ? 'Deactivate' : 'Activate'}
+                </Button>
+              </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -592,10 +611,14 @@ const AdminDashboard = () => {
     chargingDC: { supported: true, maxPower: '', connectorTypes: [] },
     specifications: { year: '', range: '', weight: '' }
   });
+  const [makeModels, setMakeModels] = useState([]);
+  const [blockedCapacities, setBlockedCapacities] = useState([]);
   const [vehicleErrors, setVehicleErrors] = useState({});
   const [error, setError] = useState('');
   const [vehicleActionError, setVehicleActionError] = useState('');
   const [vehicleActionSuccess, setVehicleActionSuccess] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTargetVehicle, setDeleteTargetVehicle] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
 
@@ -626,6 +649,7 @@ const AdminDashboard = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [addAdminDialogOpen, setAddAdminDialogOpen] = useState(false);
 
   const loadDashboard = async () => {
     try {
@@ -760,6 +784,40 @@ const AdminDashboard = () => {
     setVehicleForm(updated);
   };
 
+  useEffect(() => {
+    const loadModels = async () => {
+      if (!vehicleForm.make?.trim()) {
+        setMakeModels([]);
+        return;
+      }
+      try {
+        const models = await api.getModelsByMakeApi(vehicleForm.make.trim());
+        setMakeModels(models);
+      } catch (e) {
+        console.error('Failed to load models for make', e);
+        setMakeModels([]);
+      }
+    };
+    loadModels();
+  }, [vehicleForm.make]);
+
+  useEffect(() => {
+    const loadCapacities = async () => {
+      if (!vehicleForm.make?.trim() || !vehicleForm.model?.trim()) {
+        setBlockedCapacities([]);
+        return;
+      }
+      try {
+        const caps = await api.getCapacitiesByMakeModelApi(vehicleForm.make.trim(), vehicleForm.model.trim());
+        setBlockedCapacities((caps || []).map((c) => Number(c)).filter((n) => !Number.isNaN(n)));
+      } catch (e) {
+        console.error('Failed to load capacities', e);
+        setBlockedCapacities([]);
+      }
+    };
+    loadCapacities();
+  }, [vehicleForm.make, vehicleForm.model]);
+
   const handleVehicleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -876,22 +934,24 @@ const AdminDashboard = () => {
     setVehicleDialogOpen(true);
   };
 
-  const handleDeleteVehicle = async (vehicleId) => {
-    if (window.confirm('Are you sure you want to delete this vehicle?')) {
-      try {
-        setVehicleActionError('');
-        const data = await api.deleteVehicleApi(vehicleId);
-        if (data.success) {
-          setVehicleActionSuccess('Vehicle deleted successfully');
-          await loadVehicles().then(setVehicles);
-          setTimeout(() => setVehicleActionSuccess(''), 2000);
-        } else {
-          setVehicleActionError(data.message || 'Failed to delete vehicle');
-        }
-      } catch (error) {
-        console.error('Error deleting vehicle:', error);
-        setVehicleActionError(error.message || 'Network error while deleting');
+  const handleHardDeleteVehicle = async () => {
+    if (!deleteTargetVehicle) return;
+    try {
+      setVehicleActionError('');
+      const data = await api.deleteVehicleApi(deleteTargetVehicle._id, true);
+      if (data.success) {
+        setVehicleActionSuccess('Vehicle permanently deleted');
+        await loadVehicles().then(setVehicles);
+        setTimeout(() => setVehicleActionSuccess(''), 2000);
+      } else {
+        setVehicleActionError(data.message || 'Failed to delete vehicle');
       }
+    } catch (error) {
+      console.error('Error deleting vehicle:', error);
+      setVehicleActionError(error.message || 'Network error while deleting');
+    } finally {
+      setDeleteDialogOpen(false);
+      setDeleteTargetVehicle(null);
     }
   };
 
@@ -910,7 +970,6 @@ const AdminDashboard = () => {
     { id: 'dashboard', label: 'Main Dashboard', icon: <HomeIcon />, active: true },
     { id: 'users', label: 'User Management', icon: <PeopleIcon /> },
     { id: 'corporate-admins', label: 'Corporate Admin Management', icon: <BusinessIcon /> },
-    { id: 'add-corporate-admin', label: 'Add Corporate Admin', icon: <BusinessIcon /> },
     { id: 'stations', label: 'Station Management', icon: <StorageIcon /> },
     { id: 'vehicles', label: 'Vehicle Management', icon: <ShoppingCartIcon /> },
     { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon /> },
@@ -1018,7 +1077,7 @@ const AdminDashboard = () => {
                 dashboard: 'Overview and KPIs',
                 users: 'Manage platform users and their roles',
                 'corporate-admins': 'View and manage corporate administrators',
-                'add-corporate-admin': 'Create a new corporate admin account',
+                
                 stations: 'Manage charging stations and operational status',
                 analytics: 'Platform analytics and insights',
                 'ai-models': 'Manage AI models and configurations',
@@ -1309,12 +1368,8 @@ const AdminDashboard = () => {
               <CorporateAdminManagementSection 
                 admins={corporateAdmins}
                 onRefresh={loadDashboard}
+                onAddAdmin={() => setAddAdminDialogOpen(true)}
               />
-            )}
-
-            {/* Add Corporate Admin Section */}
-            {activeSection === 'add-corporate-admin' && (
-              <AddCorporateAdminSection onRefresh={loadDashboard} />
             )}
 
             {/* User Management Section */}
@@ -1444,14 +1499,24 @@ const AdminDashboard = () => {
                                   </Typography>
                                 </TableCell>
                                 <TableCell>
-                                  <Chip 
-                                    label={vehicle.isActive ? 'Active' : 'Inactive'} 
-                                    size="small" 
-                                    sx={{ 
-                                      bgcolor: vehicle.isActive ? 'success.main' : 'warning.main',
-                                      color: 'white'
-                                    }}
-                                  />
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="caption" color="text.secondary">Inactive</Typography>
+                                    <Switch
+                                      size="small"
+                                      checked={!!vehicle.isActive}
+                                      onChange={async (e) => {
+                                        try {
+                                          await api.updateVehicleApi(vehicle._id, { isActive: e.target.checked });
+                                          await loadVehicles().then(setVehicles);
+                                        } catch (err) {
+                                          console.error('Status toggle failed', err);
+                                          setVehicleActionError(err.message || 'Failed to update status');
+                                        }
+                                      }}
+                                      inputProps={{ 'aria-label': 'vehicle active toggle' }}
+                                    />
+                                    <Typography variant="caption" color="text.secondary">Active</Typography>
+                                  </Box>
                                 </TableCell>
                                 <TableCell>
                                   <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1465,7 +1530,7 @@ const AdminDashboard = () => {
                                     </IconButton>
                                     <IconButton 
                                       size="small" 
-                                      onClick={() => handleDeleteVehicle(vehicle._id)}
+                                      onClick={() => { setDeleteTargetVehicle(vehicle); setDeleteDialogOpen(true); }}
                                       sx={{ color: 'error.main' }}
                                       title="Delete Vehicle"
                                     >
@@ -1607,23 +1672,15 @@ const AdminDashboard = () => {
                   options={vehicleMakes}
                   value={vehicleForm.make}
                   onChange={(event, newValue) => {
-                    const updated = { ...vehicleForm, make: newValue || '' };
+                    const updated = { ...vehicleForm, make: newValue || '', model: '' };
                     setVehicleForm(updated);
-                    // Live validation
-                    setVehicleErrors((prev) => ({
-                      ...prev,
-                      make: !newValue?.trim() ? 'Make is required' : ''
-                    }));
+                    setVehicleErrors((prev) => ({ ...prev, make: !newValue?.trim() ? 'Make is required' : '' }));
                   }}
                   onInputChange={(event, newInputValue) => {
                     if (event && event.type === 'change') {
-                      const updated = { ...vehicleForm, make: newInputValue };
+                      const updated = { ...vehicleForm, make: newInputValue, model: '' };
                       setVehicleForm(updated);
-                      // Live validation
-                      setVehicleErrors((prev) => ({
-                        ...prev,
-                        make: !newInputValue.trim() ? 'Make is required' : ''
-                      }));
+                      setVehicleErrors((prev) => ({ ...prev, make: !newInputValue.trim() ? 'Make is required' : '' }));
                     }
                   }}
                   renderInput={(params) => (
@@ -1641,15 +1698,33 @@ const AdminDashboard = () => {
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField
+                <Autocomplete
                   fullWidth
-                  label="Model"
+                  options={makeModels}
                   value={vehicleForm.model}
-                  onChange={handleVehicleInputChange('model')}
-                  inputProps={{ maxLength: 10 }}
-                  required
-                  error={Boolean(vehicleErrors.model)}
-                  helperText={vehicleErrors.model}
+                  onChange={(event, newValue) => {
+                    const updated = { ...vehicleForm, model: newValue || '' };
+                    setVehicleForm(updated);
+                    setVehicleErrors((prev) => ({ ...prev, model: !newValue?.trim() ? 'Model is required' : '' }));
+                  }}
+                  onInputChange={(event, newInputValue) => {
+                    if (event && event.type === 'change') {
+                      const updated = { ...vehicleForm, model: newInputValue };
+                      setVehicleForm(updated);
+                      setVehicleErrors((prev) => ({ ...prev, model: !newInputValue.trim() ? 'Model is required' : '' }));
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Model"
+                      required
+                      error={Boolean(vehicleErrors.model)}
+                      helperText={vehicleErrors.model}
+                    />
+                  )}
+                  freeSolo
+                  clearOnEscape
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -1677,11 +1752,18 @@ const AdminDashboard = () => {
                   label="Battery Capacity (kWh)"
                   type="number"
                   value={vehicleForm.batteryCapacity}
-                  onChange={handleVehicleInputChange('batteryCapacity')}
+                  onChange={(e) => {
+                    handleVehicleInputChange('batteryCapacity')(e);
+                    const num = Number(e.target.value);
+                    setVehicleErrors((prev) => ({
+                      ...prev,
+                      batteryCapacity: blockedCapacities.includes(num) ? 'This capacity already exists for the selected make and model' : prev.batteryCapacity
+                    }));
+                  }}
                   required
                   inputProps={{ min: 50, max: 2000 }}
-                  error={Boolean(vehicleErrors.batteryCapacity)}
-                  helperText={vehicleErrors.batteryCapacity}
+                  error={Boolean(vehicleErrors.batteryCapacity) || blockedCapacities.includes(Number(vehicleForm.batteryCapacity))}
+                  helperText={blockedCapacities.includes(Number(vehicleForm.batteryCapacity)) ? 'This capacity already exists for the selected make and model' : vehicleErrors.batteryCapacity}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -1878,6 +1960,42 @@ const AdminDashboard = () => {
           >
             {vehicleLoading ? 'Saving...' : (editingVehicle ? 'Update' : 'Create')}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm Delete Vehicle Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => { setDeleteDialogOpen(false); setDeleteTargetVehicle(null); }} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Vehicle</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Permanently delete this vehicle? This cannot be undone.
+          </Typography>
+          {deleteTargetVehicle && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" color="text.secondary">Vehicle</Typography>
+              <Typography variant="body2">{deleteTargetVehicle.make} {deleteTargetVehicle.model}</Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setDeleteDialogOpen(false); setDeleteTargetVehicle(null); }}>Cancel</Button>
+          <Button onClick={handleHardDeleteVehicle} variant="contained" color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Corporate Admin Dialog */}
+      <Dialog
+        open={addAdminDialogOpen}
+        onClose={() => setAddAdminDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Add Corporate Admin</DialogTitle>
+        <DialogContent dividers>
+          <AddCorporateAdminSection onRefresh={() => { loadDashboard(); setAddAdminDialogOpen(false); }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddAdminDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

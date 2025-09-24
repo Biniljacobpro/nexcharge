@@ -47,6 +47,9 @@ export const login = async (req, res) => {
 		const { email, password } = req.body;
 		const user = await User.findOne({ 'personalInfo.email': email });
 		if (!user || !user.credentials?.passwordHash) return res.status(401).json({ error: 'Invalid credentials' });
+    if (user.credentials && user.credentials.isActive === false) {
+      return res.status(403).json({ error: 'Your account has been deactivated. Please contact the administrator.' });
+    }
 		const match = await bcrypt.compare(password, user.credentials.passwordHash);
 		if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 		user.credentials.lastLogin = new Date();
@@ -147,7 +150,7 @@ export const checkEmailAvailability = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { firstName, lastName, phone, address } = req.body;
+    const { firstName, lastName, phone, address, evVehicle } = req.body;
     const userId = req.user.sub;
     console.log('Profile update request:', { userId, firstName, lastName, phone, address });
 
@@ -184,6 +187,20 @@ export const updateProfile = async (req, res) => {
     if (phone !== undefined) user.personalInfo.phone = phone;
     if (address !== undefined) user.personalInfo.address = address;
 
+    // Optionally set EV user vehicle info
+    if (evVehicle && typeof evVehicle === 'object') {
+      const { make, model, year, batteryCapacity, preferredChargingType } = evVehicle;
+      user.roleSpecificData = user.roleSpecificData || {};
+      user.roleSpecificData.evUserInfo = user.roleSpecificData.evUserInfo || {};
+      user.roleSpecificData.evUserInfo.vehicleInfo = {
+        make: make || '',
+        model: model || '',
+        year: typeof year === 'number' ? year : undefined,
+        batteryCapacity: typeof batteryCapacity === 'number' ? batteryCapacity : undefined,
+        preferredChargingType: preferredChargingType || undefined
+      };
+    }
+
     await user.save();
 
     // Return sanitized user data
@@ -206,6 +223,43 @@ export const updateProfile = async (req, res) => {
   } catch (error) {
     console.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+};
+
+// Update only EV user's vehicle info without requiring name fields
+export const updateUserVehicle = async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { make, model, year, batteryCapacity, preferredChargingType, chargingAC, chargingDC, specifications } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user || user.role !== 'ev_user') {
+      return res.status(404).json({ success: false, message: 'EV User not found' });
+    }
+
+    user.roleSpecificData = user.roleSpecificData || {};
+    user.roleSpecificData.evUserInfo = user.roleSpecificData.evUserInfo || {};
+    user.roleSpecificData.evUserInfo.vehicleInfo = {
+      make: make || '',
+      model: model || '',
+      year: typeof year === 'number' ? year : undefined,
+      batteryCapacity: typeof batteryCapacity === 'number' ? batteryCapacity : undefined,
+      preferredChargingType: preferredChargingType || undefined,
+      chargingAC: chargingAC || undefined,
+      chargingDC: chargingDC || undefined,
+      specifications: specifications || undefined
+    };
+
+    await user.save();
+
+    return res.json({ 
+      success: true,
+      message: 'Vehicle information updated successfully', 
+      data: user.roleSpecificData.evUserInfo.vehicleInfo 
+    });
+  } catch (error) {
+    console.error('Error updating EV user vehicle:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 

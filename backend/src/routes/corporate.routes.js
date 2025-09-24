@@ -7,7 +7,8 @@ import {
   getFranchiseOwners,
   addFranchiseOwner,
   updateFranchiseOwner,
-  deleteFranchiseOwner
+  deleteFranchiseOwner,
+  getCorporateStations
 } from '../controllers/corporate.controller.js';
 
 const router = Router();
@@ -25,6 +26,9 @@ router.get('/franchises', getFranchiseOwners);
 router.post('/franchises', addFranchiseOwner);
 router.put('/franchises/:franchiseId', updateFranchiseOwner);
 router.delete('/franchises/:franchiseId', deleteFranchiseOwner);
+
+// Stations under this corporate
+router.get('/stations', getCorporateStations);
 
 
 export default router;

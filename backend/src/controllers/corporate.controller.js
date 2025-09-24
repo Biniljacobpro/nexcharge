@@ -181,7 +181,7 @@ export const addFranchiseOwner = async (req, res) => {
     // Check if franchise name already exists for this corporate
     const existingFranchise = await Franchise.findOne({ 
       name: franchiseName.trim(),
-      'roleSpecificData.franchiseOwnerInfo.franchiseId': { $exists: true } 
+      corporateId: corporateId
     });
     if (existingFranchise) {
       return res.status(400).json({
@@ -241,7 +241,7 @@ export const addFranchiseOwner = async (req, res) => {
     const franchise = await Franchise.create({
       name: franchiseName.trim(),
       ownerId: franchiseOwner._id,
-      'roleSpecificData.franchiseOwnerInfo.franchiseId': { $exists: true },
+      corporateId: corporateId,
       contactInfo: {
         email: email.trim().toLowerCase(),
         phone: phone.replace(/\D/g, ''),
@@ -275,13 +275,18 @@ export const addFranchiseOwner = async (req, res) => {
       'roleSpecificData.franchiseOwnerInfo.franchiseId': franchise._id
     });
 
-    // Send welcome email with temporary password
-    await sendFranchiseOwnerWelcomeEmail({
-      ownerName: `${firstName} ${lastName}`.trim(),
-      ownerEmail: email.trim().toLowerCase(),
-      tempPassword,
-      franchiseName: franchiseName.trim()
-    });
+    // Send welcome email with temporary password (non-blocking for API success)
+    try {
+      await sendFranchiseOwnerWelcomeEmail({
+        ownerName: `${firstName} ${lastName}`.trim(),
+        ownerEmail: email.trim().toLowerCase(),
+        tempPassword,
+        franchiseName: franchiseName.trim()
+      });
+    } catch (mailError) {
+      console.warn('sendFranchiseOwnerWelcomeEmail failed:', mailError?.message || mailError);
+      // Do not fail the request if email fails
+    }
 
     res.status(201).json({
       success: true,
@@ -324,6 +329,7 @@ export const updateFranchiseOwner = async (req, res) => {
       city,
       state,
       pincode,
+      franchiseName,
       status
     } = req.body;
 
@@ -344,22 +350,16 @@ export const updateFranchiseOwner = async (req, res) => {
       });
     }
 
-    // Check if email already exists (excluding current user)
-    if (email && email !== franchiseOwner.email) {
-      const existingUser = await User.findOne({ email, _id: { $ne: franchiseId } });
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email already exists'
-        });
-      }
+    // Email cannot be changed via this endpoint
+    if (email && email !== franchiseOwner.personalInfo?.email) {
+      return res.status(400).json({ success: false, message: 'Email cannot be changed' });
     }
 
     // Update franchise owner
     const updateData = {};
     if (firstName) updateData.firstName = firstName.trim();
     if (lastName) updateData.lastName = lastName.trim();
-    if (email) updateData.email = email.trim().toLowerCase();
+    // do not allow email change
     if (phone) updateData.phone = phone.replace(/\D/g, '');
     if (status) updateData.status = status;
     
@@ -368,13 +368,21 @@ export const updateFranchiseOwner = async (req, res) => {
         ...franchiseOwner.personalInfo,
         firstName: firstName ? firstName.trim() : franchiseOwner.personalInfo.firstName,
         lastName: lastName ? lastName.trim() : franchiseOwner.personalInfo.lastName,
-        email: email ? email.trim().toLowerCase() : franchiseOwner.personalInfo.email,
+        email: franchiseOwner.personalInfo.email,
         phone: phone ? phone.replace(/\D/g, '') : franchiseOwner.personalInfo.phone,
         address: address || franchiseOwner.personalInfo.address,
         city: city || franchiseOwner.personalInfo.city,
         state: state || franchiseOwner.personalInfo.state,
         pincode: pincode || franchiseOwner.personalInfo.pincode
       };
+    }
+
+    // Update franchise name in Franchise document if provided
+    if (franchiseName && franchiseOwner.roleSpecificData?.franchiseOwnerInfo?.franchiseId) {
+      await Franchise.findByIdAndUpdate(
+        franchiseOwner.roleSpecificData.franchiseOwnerInfo.franchiseId,
+        { name: franchiseName.toString().trim() }
+      );
     }
 
     const updatedFranchiseOwner = await User.findByIdAndUpdate(
@@ -488,22 +496,30 @@ export const getFranchiseOwners = async (req, res) => {
 
     // Get additional data for each franchise owner
     const franchiseData = await Promise.all(
-      franchiseOwners.map(async (franchise) => {
-        const stations = await Station.find({ franchiseId: franchise._id });
-        const bookings = await Booking.find({ franchiseId: franchise._id });
+      franchiseOwners.map(async (frOwner) => {
+        const frId = frOwner?.roleSpecificData?.franchiseOwnerInfo?.franchiseId;
+        const franchiseDoc = frId ? await Franchise.findById(frId).select('name') : null;
+        const stations = await Station.find({ franchiseId: frId || frOwner._id });
+        const bookings = await Booking.find({ franchiseId: frId || frOwner._id });
         const revenue = bookings.reduce((sum, booking) => sum + (booking.amount || 0), 0);
 
+        const firstName = frOwner.personalInfo?.firstName || '';
+        const lastName = frOwner.personalInfo?.lastName || '';
+
         return {
-          id: franchise._id,
-          name: `${franchise.personalInfo?.firstName || ''} ${franchise.personalInfo?.lastName || ''}`.trim(),
-          email: franchise.personalInfo?.email,
-          phone: franchise.personalInfo?.phone,
-          location: `${franchise.personalInfo?.city || ''}, ${franchise.personalInfo?.state || ''}`.replace(/^,\s*|,\s*$/g, ''),
+          id: frOwner._id,
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`.trim(),
+          email: frOwner.personalInfo?.email,
+          phone: frOwner.personalInfo?.phone,
+          franchiseName: franchiseDoc?.name || '',
+          location: `${frOwner.personalInfo?.city || ''}, ${frOwner.personalInfo?.state || ''}`.replace(/^,\s*|,\s*$/g, ''),
           stations: stations.length,
           revenue: revenue,
-          status: franchise.status,
-          rating: 4.5, // Mock rating - implement actual rating system
-          joinDate: franchise.createdAt
+          status: frOwner.status,
+          rating: 4.5,
+          joinDate: frOwner.createdAt
         };
       })
     );
@@ -662,7 +678,47 @@ const getTimeAgo = (date) => {
 };
 
 // named exports above
+// List stations under this corporate
+export const getCorporateStations = async (req, res) => {
+  try {
+    const corporateId = await resolveCorporateIdFromRequest(req);
+    if (!corporateId) return res.status(403).json({ success: false, message: 'Corporate context not found' });
 
+    // Find franchises under this corporate
+    const franchises = await Franchise.find({ corporateId }).select('_id').lean();
+    const franchiseIds = franchises.map(f => f._id);
 
+    // Fetch stations by either corporateId or franchise linkage
+    const stations = await Station.find({
+      $or: [
+        { corporateId },
+        ...(franchiseIds.length ? [{ franchiseId: { $in: franchiseIds } }] : [])
+      ]
+    })
+      .select('name code description address city state pincode location chargers pricing amenities operational managerId createdAt updatedAt status totalChargers')
+      .lean();
 
+    const data = stations.map((s) => ({
+      id: s._id,
+      name: s.name,
+      code: s.code,
+      description: s.description || '',
+      address: s.address || '',
+      city: s.city || s.location?.city || s.location?.address?.city || '',
+      state: s.state || s.location?.state || s.location?.address?.state || '',
+      pincode: s.pincode || s.location?.pincode || s.location?.address?.pincode || '',
+      totalChargers: Array.isArray(s.chargers) ? s.chargers.length : (Number(s.totalChargers) || 0),
+      chargerTypes: Array.isArray(s.chargers) ? [...new Set(s.chargers.map(c => c.type).filter(Boolean))] : [],
+      basePrice: s.pricing?.basePrice || 0,
+      amenities: s.amenities || [],
+      status: s.operational?.isOperational === false ? 'offline' : (s.status || 'operational'),
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt
+    }));
 
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching corporate stations:', error);
+    res.status(500).json({ success: false, message: 'Error fetching stations', error: error.message });
+  }
+};

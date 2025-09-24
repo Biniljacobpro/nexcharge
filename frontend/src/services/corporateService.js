@@ -91,6 +91,10 @@ class CorporateService {
     return this.makeRequest(`/corporate/franchises?${params}`);
   }
 
+  async getCorporateStations() {
+    return this.makeRequest('/corporate/stations');
+  }
+
   async addFranchiseOwner(franchiseData) {
     return this.makeRequest('/corporate/franchises', {
       method: 'POST',
