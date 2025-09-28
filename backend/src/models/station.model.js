@@ -95,7 +95,7 @@ const StationSchema = new mongoose.Schema({
     maxPowerPerCharger: { 
       type: Number, 
       required: true,
-      min: 0,
+      min: 1,
       max: 500 // kW
     },
     totalPowerCapacity: { 
@@ -133,8 +133,8 @@ const StationSchema = new mongoose.Schema({
     basePrice: { 
       type: Number, 
       required: true,
-      min: 0,
-      max: 1000 // ₹1000 per unit
+      min: 1,
+      max: 5000 // ₹5000 per unit
     },
     cancellationPolicy: { 
       type: String, 
@@ -153,8 +153,8 @@ const StationSchema = new mongoose.Schema({
     parkingSlots: { 
       type: Number, 
       required: true,
-      min: 1,
-      max: 100
+      min: 0,
+      max: 30
     },
     parkingFee: { 
       type: Number, 

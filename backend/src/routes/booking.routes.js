@@ -5,7 +5,8 @@ import {
   getUserBookings,
   getBookingById,
   cancelBooking,
-  getStationBookings
+  getStationBookings,
+  updateBooking
 } from '../controllers/booking.controller.js';
 
 const router = Router();
@@ -18,6 +19,7 @@ router.post('/', createBooking);
 router.get('/my-bookings', getUserBookings);
 router.get('/:bookingId', getBookingById);
 router.patch('/:bookingId/cancel', cancelBooking);
+router.patch('/:bookingId', updateBooking);
 
 // Station booking routes (for managers/owners)
 router.get('/station/:stationId', getStationBookings);

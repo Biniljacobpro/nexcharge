@@ -15,7 +15,17 @@ const NotificationPrefsSchema = new mongoose.Schema({
 const VehicleInfoSchema = new mongoose.Schema({
 	make: String,
 	model: String,
-	year: Number,
+	year: {
+		type: Number,
+		validate: {
+			validator: function(v) {
+				if (v == null) return true; // optional
+				const current = new Date().getFullYear();
+				return v >= 2015 && v <= current;
+			},
+			message: 'Year must be between 2015 and the current year'
+		}
+	},
 	batteryCapacity: Number,
 	currentBatteryLevel: Number,
 	preferredChargingType: { type: String, enum: ['fast', 'slow', 'rapid'] },
@@ -23,6 +33,8 @@ const VehicleInfoSchema = new mongoose.Schema({
 
 const EVUserInfoSchema = new mongoose.Schema({
 	vehicleInfo: VehicleInfoSchema,
+	// Allow multiple vehicles; items will not have _id fields (managed by index)
+	vehicles: [VehicleInfoSchema],
 	paymentMethods: [PaymentMethodSchema],
 	loyaltyPoints: { type: Number, default: 0 },
 	notificationPreferences: { type: NotificationPrefsSchema, default: () => ({}) },

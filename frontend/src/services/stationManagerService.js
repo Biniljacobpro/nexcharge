@@ -71,6 +71,59 @@ export const stationManagerService = {
       console.error('Error fetching performance reports:', error);
       throw error;
     }
+  },
+
+  // Get station details by ID
+  getStationDetails: async (stationId) => {
+    const response = await authFetch(`${API_BASE}/station-manager/stations/${stationId}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to fetch station details');
+    }
+    return await response.json();
+  },
+
+  // Update station details with whitelisted fields
+  updateStationDetails: async (stationId, payload) => {
+    const response = await authFetch(`${API_BASE}/station-manager/stations/${stationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to update station');
+    }
+    return await response.json();
+  },
+
+  // Upload station images
+  uploadStationImages: async (stationId, files) => {
+    const formData = new FormData();
+    [...files].forEach((file) => formData.append('images', file));
+    const response = await authFetch(`${API_BASE}/station-manager/stations/${stationId}/images`, {
+      method: 'POST',
+      body: formData
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to upload images');
+    }
+    return await response.json();
+  },
+
+  // Delete a station image by URL
+  deleteStationImage: async (stationId, url) => {
+    const response = await authFetch(`${API_BASE}/station-manager/stations/${stationId}/images`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to delete image');
+    }
+    return await response.json();
   }
 };
 

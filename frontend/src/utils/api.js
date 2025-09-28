@@ -10,6 +10,37 @@ const setTokens = ({ accessToken, refreshToken }) => {
   if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
 };
 
+// Admin Station Management API
+export const adminGetStations = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const res = await authFetch(`${API_BASE}/admin/stations${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to load stations');
+  return data.data || [];
+};
+
+export const adminUpdateStationStatus = async (id, status) => {
+  const res = await authFetch(`${API_BASE}/admin/stations/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to update station status');
+  return data.data;
+};
+
+export const adminUpdateStationManager = async (id, managerId) => {
+  const res = await authFetch(`${API_BASE}/admin/stations/${id}/manager`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ managerId })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to update station manager');
+  return data.data;
+};
+
 export const signupApi = async ({ firstName, lastName, email, password }) => {
   const res = await fetch(`${API_BASE}/auth/signup`, {
     method: 'POST',
@@ -20,6 +51,43 @@ export const signupApi = async ({ firstName, lastName, email, password }) => {
   if (!res.ok) throw new Error(data.error || 'Signup failed');
   setTokens(data);
   return data;
+};
+
+// EV User vehicles (multiple)
+export const getMyVehiclesApi = async () => {
+  const res = await authFetch(`${API_BASE}/auth/my-vehicles`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to load vehicles');
+  return data.data || [];
+};
+
+export const addUserVehicleApi = async ({ make, model, year, batteryCapacity, preferredChargingType }) => {
+  const res = await authFetch(`${API_BASE}/auth/my-vehicles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ make, model, year, batteryCapacity, preferredChargingType })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to add vehicle');
+  return data.data || [];
+};
+
+export const removeUserVehicleApi = async (index) => {
+  const res = await authFetch(`${API_BASE}/auth/my-vehicles/${index}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to remove vehicle');
+  return data.data || [];
+};
+
+export const updateUserVehicleAtIndexApi = async (index, payload) => {
+  const res = await authFetch(`${API_BASE}/auth/my-vehicles/${index}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update vehicle');
+  return data.data || [];
 };
 
 export const loginApi = async ({ email, password }) => {
@@ -335,6 +403,29 @@ export const getPublicStationsApi = async (params = {}) => {
   const res = await fetch(url);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Failed to load stations');
+  return data;
+};
+
+// Bookings
+export const updateBookingApi = async (bookingId, payload) => {
+  const res = await authFetch(`${API_BASE}/bookings/${bookingId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to update booking');
+  return data;
+};
+
+export const cancelBookingApi = async (bookingId, reason) => {
+  const res = await authFetch(`${API_BASE}/bookings/${bookingId}/cancel`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to cancel booking');
   return data;
 };
 

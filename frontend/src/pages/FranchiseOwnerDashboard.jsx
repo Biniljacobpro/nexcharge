@@ -155,7 +155,8 @@ const FranchiseOwnerDashboard = () => {
     
     // Contact & Ownership
     supportPhone: '',
-    supportEmail: ''
+    supportEmail: '',
+    managerEmail: ''
   });
   const [stationLoading, setStationLoading] = useState(false);
   const [stations, setStations] = useState([]);
@@ -533,8 +534,11 @@ const FranchiseOwnerDashboard = () => {
       parkingSlots: 1,
       parkingFee: '',
       supportPhone: '',
-      supportEmail: ''
+      supportEmail: '',
+      managerEmail: ''
     });
+    // Load available managers for assignment
+    loadAvailableManagers();
     setStationDialog({ open: true, mode: 'add', station: null });
   };
 
@@ -571,8 +575,11 @@ const FranchiseOwnerDashboard = () => {
       parkingSlots: op.parkingSlots ?? station.parkingSlots ?? 1,
       parkingFee: op.parkingFee ?? station.parkingFee ?? '',
       supportPhone: contact.supportPhone || station.supportPhone || '',
-      supportEmail: contact.supportEmail || station.supportEmail || ''
+      supportEmail: contact.supportEmail || station.supportEmail || '',
+      managerEmail: station.manager?.email || station.contact?.managerEmail || ''
     });
+    // Load available managers so user can reassign
+    loadAvailableManagers();
     setStationDialog({ open: true, mode: 'edit', station });
   };
 
@@ -621,6 +628,33 @@ const FranchiseOwnerDashboard = () => {
         return;
       }
 
+      // Range validations
+      const totalChargersNum = parseInt(stationForm.totalChargers);
+      if (Number.isNaN(totalChargersNum) || totalChargersNum < 1 || totalChargersNum > 50) {
+        setSnackbar({ open: true, message: 'Total chargers must be between 1 and 50', severity: 'error' });
+        return;
+      }
+      const maxPowerNum = parseFloat(stationForm.maxPowerPerCharger);
+      if (Number.isNaN(maxPowerNum) || maxPowerNum < 1 || maxPowerNum > 500) {
+        setSnackbar({ open: true, message: 'Max power per charger must be between 1 and 500 kW', severity: 'error' });
+        return;
+      }
+      const basePriceNum = parseFloat(stationForm.basePrice);
+      if (Number.isNaN(basePriceNum) || basePriceNum < 1 || basePriceNum > 5000) {
+        setSnackbar({ open: true, message: 'Base price must be between ₹1 and ₹5000', severity: 'error' });
+        return;
+      }
+      const parkingSlotsNum = parseInt(stationForm.parkingSlots);
+      if (Number.isNaN(parkingSlotsNum) || parkingSlotsNum < 0 || parkingSlotsNum > 30) {
+        setSnackbar({ open: true, message: 'EV parking slots must be between 0 and 30', severity: 'error' });
+        return;
+      }
+      const parkingFeeNum = stationForm.parkingFee === '' ? 0 : parseFloat(stationForm.parkingFee);
+      if (Number.isNaN(parkingFeeNum) || parkingFeeNum < 0 || parkingFeeNum > 1000) {
+        setSnackbar({ open: true, message: 'Parking fee must be between 0 and 1000', severity: 'error' });
+        return;
+      }
+
       // Prefer DMS input if provided
       let latitude = parseFloat(stationForm.latitude) || 0;
       let longitude = parseFloat(stationForm.longitude) || 0;
@@ -636,12 +670,13 @@ const FranchiseOwnerDashboard = () => {
 
       const stationData = {
         ...stationForm,
-        totalChargers: parseInt(stationForm.totalChargers),
-        maxPowerPerCharger: parseFloat(stationForm.maxPowerPerCharger) || 0,
-        totalPowerCapacity: parseFloat(stationForm.totalPowerCapacity) || 0,
-        basePrice: parseFloat(stationForm.basePrice) || 0,
-        parkingSlots: parseInt(stationForm.parkingSlots),
-        parkingFee: parseFloat(stationForm.parkingFee) || 0,
+        totalChargers: totalChargersNum,
+        maxPowerPerCharger: maxPowerNum,
+        // Send undefined if empty so backend computes automatically
+        totalPowerCapacity: stationForm.totalPowerCapacity !== '' ? (parseFloat(stationForm.totalPowerCapacity) || 0) : undefined,
+        basePrice: basePriceNum,
+        parkingSlots: parkingSlotsNum,
+        parkingFee: parkingFeeNum,
         latitude,
         longitude
       };
@@ -1131,7 +1166,8 @@ const FranchiseOwnerDashboard = () => {
                       onChange={(e) => setStationForm({ ...stationForm, totalChargers: e.target.value })}
                       required
                       disabled={stationDialog.mode === 'view'}
-                      inputProps={{ min: 1 }}
+                      inputProps={{ min: 1, max: 50 }}
+                      helperText="Enter a value between 1 and 50"
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
@@ -1143,7 +1179,8 @@ const FranchiseOwnerDashboard = () => {
                       onChange={(e) => setStationForm({ ...stationForm, maxPowerPerCharger: e.target.value })}
                       required
                       disabled={stationDialog.mode === 'view'}
-                      inputProps={{ min: 0, step: 0.1 }}
+                      inputProps={{ min: 1, max: 500, step: 0.1 }}
+                      helperText="Enter a value between 1 and 500 kW"
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -1153,9 +1190,9 @@ const FranchiseOwnerDashboard = () => {
                       type="number"
                       value={stationForm.totalPowerCapacity}
                       onChange={(e) => setStationForm({ ...stationForm, totalPowerCapacity: e.target.value })}
-                      required
                       disabled={stationDialog.mode === 'view'}
                       inputProps={{ min: 0, step: 0.1 }}
+                      helperText="Optional: Auto-calculated if left empty"
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -1213,10 +1250,11 @@ const FranchiseOwnerDashboard = () => {
                       onChange={(e) => setStationForm({ ...stationForm, basePrice: e.target.value })}
                       required
                       disabled={stationDialog.mode === 'view'}
-                      inputProps={{ min: 0, step: 0.01 }}
+                      inputProps={{ min: 1, max: 5000, step: 0.01 }}
                       InputProps={{
                         startAdornment: <InputAdornment position="start">₹</InputAdornment>
                       }}
+                      helperText="Enter a value between ₹1 and ₹5000"
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -1340,6 +1378,35 @@ const FranchiseOwnerDashboard = () => {
               </AccordionSummary>
               <AccordionDetails>
                 <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth disabled={stationDialog.mode === 'view'}>
+                      <InputLabel>Assign Station Manager</InputLabel>
+                      <Select
+                        value={stationForm.managerEmail}
+                        label="Assign Station Manager"
+                        onChange={(e) => {
+                          const email = e.target.value;
+                          const m = (availableManagers || []).find(x => (x.email || x.personalInfo?.email) === email);
+                          setStationForm({
+                            ...stationForm,
+                            managerEmail: email,
+                            supportEmail: email || stationForm.supportEmail,
+                            supportPhone: (m?.phone || m?.personalInfo?.phone || stationForm.supportPhone || '')
+                          });
+                        }}
+                      >
+                        {(availableManagers || []).length === 0 ? (
+                          <SelectMenuItem value="" disabled>No available managers</SelectMenuItem>
+                        ) : (
+                          (availableManagers || []).map((m) => (
+                            <SelectMenuItem key={(m.id || m._id || m.email || m.personalInfo?.email)} value={(m.email || m.personalInfo?.email) || ''}>
+                              {`${m.firstName || m.personalInfo?.firstName || ''} ${m.lastName || m.personalInfo?.lastName || ''}`.trim()} — {(m.email || m.personalInfo?.email) || ''}
+                            </SelectMenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
+                  </Grid>
                   <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth

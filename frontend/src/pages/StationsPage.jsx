@@ -4,6 +4,7 @@ import DirectionsIcon from '@mui/icons-material/Directions';
 import SearchIcon from '@mui/icons-material/Search';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import UserNavbar from '../components/UserNavbar';
+import InteractiveMap from '../components/InteractiveMap';
 import Footer from '../components/Footer';
 import { getMe, getPublicStationsApi } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
@@ -69,27 +70,38 @@ const StationsPage = () => {
             </Grid>
           </Grid>
 
-          <Grid container spacing={2}>
-            {loading && (
-              <Grid item xs={12}><Typography>Loading stations...</Typography></Grid>
-            )}
-            {!loading && stations.length === 0 && (
-              <Grid item xs={12}><Typography color="text.secondary">No stations found.</Typography></Grid>
-            )}
-            {stations.map((s) => {
+          <Grid container spacing={3}>
+            {/* Left: Stations List */}
+            <Grid item xs={12} md={7} lg={8}>
+              <Grid container spacing={2}>
+                {loading && (
+                  <Grid item xs={12}><Typography>Loading stations...</Typography></Grid>
+                )}
+                {!loading && stations.length === 0 && (
+                  <Grid item xs={12}><Typography color="text.secondary">No stations found.</Typography></Grid>
+                )}
+                {stations.map((s) => {
+              // Pricing label
               const pricingLabel = s && typeof s.pricing === 'object'
                 ? (s.pricing.basePrice ? `${s.pricing.currency || '₹'}${s.pricing.basePrice}/kWh` : (s.pricing.model || 'Pricing'))
                 : (s?.pricing || null);
-              const chargerTypes = Array.isArray(s?.chargerTypes)
-                ? s.chargerTypes.map((t) => (typeof t === 'string' ? t : (t?.type || 'charger')))
+              // Connector types from capacity
+              const chargerTypes = Array.isArray(s?.capacity?.chargerTypes)
+                ? s.capacity.chargerTypes.map((t) => (typeof t === 'string' ? t : (t?.type || 'charger')))
                 : [];
-              const available = typeof s?.availablePorts === 'number' ? s.availablePorts : (s?.availability?.available || undefined);
-              const total = typeof s?.totalPorts === 'number' ? s.totalPorts : (s?.availability?.total || undefined);
-              const statusText = typeof s?.status === 'string' ? s.status : (s?.status?.text || undefined);
-              const rating = typeof s?.rating === 'number' ? s.rating : (typeof s?.ratingAverage === 'number' ? s.ratingAverage : undefined);
+              // Status and availability
+              const rawStatus = s?.operational?.status;
+              const isMaintenance = rawStatus === 'maintenance';
+              const available = typeof s?.availableSlots === 'number' ? s.availableSlots : undefined;
+              const total = typeof s?.capacity?.totalChargers === 'number' ? s.capacity.totalChargers : undefined;
+              const statusText = isMaintenance
+                ? 'Under maintenance'
+                : (rawStatus === 'active' ? 'Ready for charging' : (typeof rawStatus === 'string' ? rawStatus : undefined));
+              // Rating and amenities (fallback rating to 4.5 if none provided)
+              const rating = typeof s?.analytics?.rating === 'number' ? s.analytics.rating : (typeof s?.ratingAverage === 'number' ? s.ratingAverage : undefined);
               const amenities = Array.isArray(s?.amenities) && s.amenities.length > 0 ? s.amenities : null;
               return (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={s._id}>
+              <Grid item xs={12} sm={6} md={6} lg={6} key={s._id}>
                 <Card elevation={2} onClick={() => navigate(`/stations/${s._id}`)} sx={{ height: '100%', display: 'flex', flexDirection: 'column', cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
                   <CardContent sx={{ p: 2, flex: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -100,8 +112,12 @@ const StationsPage = () => {
                       {chargerTypes[0] && (
                         <Chip size="small" label={chargerTypes[0]} />
                       )}
-                      {typeof available === 'number' && (
-                        <Chip size="small" label={`${available}/${total ?? available} available`} />
+                      {isMaintenance ? (
+                        <Chip size="small" color="warning" label="Under maintenance" />
+                      ) : (
+                        typeof available === 'number' && (
+                          <Chip size="small" color="success" label={`${available}/${total ?? available} available`} />
+                        )
                       )}
                       {pricingLabel && (
                         <Chip size="small" label={pricingLabel} />
@@ -111,12 +127,27 @@ const StationsPage = () => {
                       {`⭐ ${rating ? rating.toFixed(1) : '4.5'}/5`} • {amenities ? `${amenities.length} amenities` : 'No amenities listed'}
                     </Typography>
                     {statusText && (
-                      <Typography variant="body2" color="text.secondary">{statusText}</Typography>
+                      <Typography variant="body2" color={isMaintenance ? 'warning.main' : 'text.secondary'}>
+                        {statusText}
+                      </Typography>
                     )}
                   </CardContent>
                 </Card>
               </Grid>
             );})}
+              </Grid>
+            </Grid>
+
+            {/* Right: Compact Map Panel */}
+            <Grid item xs={12} md={5} lg={4}>
+              <Card elevation={3} sx={{ position: 'sticky', top: 16 }}>
+                <CardContent sx={{ p: 0 }}>
+                  <Box sx={{ height: { xs: 320, md: 440 } }}>
+                    <InteractiveMap compact height={440} />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
           </Grid>
         </Container>
       </Box>

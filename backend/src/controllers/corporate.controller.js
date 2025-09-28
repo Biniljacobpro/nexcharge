@@ -19,24 +19,114 @@ const resolveCorporateIdFromRequest = async (req) => {
   }
 };
 
+// Allow corporate admin to update station operational status for stations under their corporate
+export const updateCorporateStationStatus = async (req, res) => {
+  try {
+    const corporateId = await resolveCorporateIdFromRequest(req);
+    if (!corporateId) return res.status(403).json({ success: false, message: 'Corporate context not found' });
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const allowed = ['active', 'maintenance', 'inactive'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status. Allowed: active, maintenance, inactive' });
+    }
+
+    // Verify station belongs to corporate (directly or via franchises)
+    const franchises = await Franchise.find({ corporateId }).select('_id').lean();
+    const franchiseIds = franchises.map(f => f._id);
+
+    const station = await Station.findOne({
+      _id: id,
+      $or: [
+        { corporateId },
+        ...(franchiseIds.length ? [{ franchiseId: { $in: franchiseIds } }] : [])
+      ]
+    });
+
+    if (!station) {
+      return res.status(404).json({ success: false, message: 'Station not found for this corporate' });
+    }
+
+    station.operational = station.operational || {};
+    station.operational.status = status;
+    await station.save();
+
+    return res.json({ success: true, message: 'Status updated', data: { id: station._id, status } });
+  } catch (error) {
+    console.error('Error updating corporate station status:', error);
+    return res.status(500).json({ success: false, message: 'Error updating station status' });
+  }
+};
+
+// Get corporate info for the current corporate admin
+export const getCorporateInfo = async (req, res) => {
+  try {
+    const corporateId = await resolveCorporateIdFromRequest(req);
+    if (!corporateId) return res.status(403).json({ success: false, message: 'Corporate context not found' });
+    const corp = await Corporate.findById(corporateId).select('name businessRegistrationNumber contactEmail contactPhone status createdAt updatedAt');
+    if (!corp) return res.status(404).json({ success: false, message: 'Corporate not found' });
+    return res.json({ success: true, data: corp });
+  } catch (error) {
+    console.error('Error fetching corporate info:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching corporate info' });
+  }
+};
+
+// Update corporate name (corporate admin only for own corporate)
+export const updateCorporateName = async (req, res) => {
+  try {
+    const corporateId = await resolveCorporateIdFromRequest(req);
+    if (!corporateId) return res.status(403).json({ success: false, message: 'Corporate context not found' });
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Valid name is required' });
+    }
+    if (name.trim().length > 50) {
+      return res.status(400).json({ success: false, message: 'Company name must be 50 characters or fewer' });
+    }
+    const existing = await Corporate.findOne({ name: new RegExp(`^${name.trim()}$`, 'i') });
+    if (existing && String(existing._id) !== String(corporateId)) {
+      return res.status(400).json({ success: false, message: 'A corporate with this name already exists' });
+    }
+    const updated = await Corporate.findByIdAndUpdate(
+      corporateId,
+      { $set: { name: name.trim() } },
+      { new: true }
+    ).select('name businessRegistrationNumber contactEmail contactPhone status');
+    return res.json({ success: true, message: 'Company name updated', data: updated });
+  } catch (error) {
+    console.error('Error updating corporate name:', error);
+    return res.status(500).json({ success: false, message: 'Error updating company name' });
+  }
+};
+
 // Get corporate dashboard data
 export const getDashboardData = async (req, res) => {
   try {
     const corporateId = await resolveCorporateIdFromRequest(req);
     if (!corporateId) return res.status(403).json({ success: false, message: 'Corporate context not found' });
     
-    // Get franchise owners (users with role 'franchise' under this corporate)
+    // Get franchises under this corporate
+    const corpFranchises = await Franchise.find({ corporateId }).select('_id').lean();
+    const corpFranchiseIds = corpFranchises.map(f => f._id);
+
+    // Get franchise owners under this corporate (owners whose franchiseId belongs to this corporate)
     const franchiseOwners = await User.find({ 
       role: 'franchise_owner', 
-      'roleSpecificData.franchiseOwnerInfo.franchiseId': { $exists: true }
-    }).select('personalInfo.firstName personalInfo.lastName personalInfo.email personalInfo.phone status createdAt roleSpecificData');
+      'roleSpecificData.franchiseOwnerInfo.franchiseId': { $in: corpFranchiseIds }
+    }).select('personalInfo.firstName personalInfo.lastName personalInfo.email personalInfo.phone status credentials.isActive createdAt roleSpecificData');
 
     // Get total stations under this corporate
-    const stations = await Station.find({ corporateId: corporateId });
+    const stations = await Station.find({ $or: [ { corporateId }, { franchiseId: { $in: corpFranchiseIds } } ] });
     
     // Get total bookings and revenue
     const bookings = await Booking.find({ 
-      'roleSpecificData.franchiseOwnerInfo.franchiseId': { $exists: true },
+      $or: [
+        { corporateId },
+        { franchiseId: { $in: corpFranchiseIds } },
+      ],
       status: { $in: ['completed', 'in-progress'] }
     });
 
@@ -423,7 +513,7 @@ export const deleteFranchiseOwner = async (req, res) => {
       _id: franchiseId,
       role: 'franchise_owner',
       'roleSpecificData.franchiseOwnerInfo.franchiseId': { $exists: true }
-    });
+    }).select('roleSpecificData.franchiseOwnerInfo.franchiseId');
 
     if (!franchiseOwner) {
       return res.status(404).json({
@@ -432,21 +522,35 @@ export const deleteFranchiseOwner = async (req, res) => {
       });
     }
 
-    // Check if franchise owner has active stations
-    const activeStations = await Station.find({
-      franchiseId: franchiseId,
-      status: 'active'
-    });
+    // Determine the Franchise document id linked to this owner
+    const linkedFranchiseId = franchiseOwner.roleSpecificData?.franchiseOwnerInfo?.franchiseId;
 
-    if (activeStations.length > 0) {
+    // Block deletion if any stations exist under this franchise
+    const totalStations = await Station.countDocuments({ franchiseId: linkedFranchiseId });
+    if (totalStations > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete franchise owner with active stations. Please transfer or deactivate stations first.'
+        message: 'Cannot delete franchise owner with existing stations. Please transfer or remove stations first.'
       });
     }
 
-    // Soft delete - change status to inactive
-    await User.findByIdAndUpdate(franchiseId, { status: 'inactive' });
+    // Block deletion if any stations under this franchise have a manager assigned
+    const managedStations = await Station.countDocuments({
+      franchiseId: linkedFranchiseId,
+      managerId: { $exists: true, $ne: null }
+    });
+    if (managedStations > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete franchise owner while station managers are assigned to their stations. Please unassign managers first.'
+      });
+    }
+
+    // Hard delete: remove Franchise document and the User document
+    if (linkedFranchiseId) {
+      await Franchise.findByIdAndDelete(linkedFranchiseId);
+    }
+    await User.findByIdAndDelete(franchiseId);
 
     res.json({
       success: true,
@@ -517,7 +621,7 @@ export const getFranchiseOwners = async (req, res) => {
           location: `${frOwner.personalInfo?.city || ''}, ${frOwner.personalInfo?.state || ''}`.replace(/^,\s*|,\s*$/g, ''),
           stations: stations.length,
           revenue: revenue,
-          status: frOwner.status,
+          status: frOwner?.credentials?.isActive ? 'active' : 'inactive',
           rating: 4.5,
           joinDate: frOwner.createdAt
         };
@@ -695,7 +799,7 @@ export const getCorporateStations = async (req, res) => {
         ...(franchiseIds.length ? [{ franchiseId: { $in: franchiseIds } }] : [])
       ]
     })
-      .select('name code description address city state pincode location chargers pricing amenities operational managerId createdAt updatedAt status totalChargers')
+      .select('name code description address city state pincode location chargers capacity pricing amenities operational managerId createdAt updatedAt status totalChargers')
       .lean();
 
     const data = stations.map((s) => ({
@@ -707,11 +811,15 @@ export const getCorporateStations = async (req, res) => {
       city: s.city || s.location?.city || s.location?.address?.city || '',
       state: s.state || s.location?.state || s.location?.address?.state || '',
       pincode: s.pincode || s.location?.pincode || s.location?.address?.pincode || '',
-      totalChargers: Array.isArray(s.chargers) ? s.chargers.length : (Number(s.totalChargers) || 0),
-      chargerTypes: Array.isArray(s.chargers) ? [...new Set(s.chargers.map(c => c.type).filter(Boolean))] : [],
+      totalChargers: (s.capacity?.totalChargers != null) 
+        ? Number(s.capacity.totalChargers) 
+        : (Array.isArray(s.chargers) ? s.chargers.length : (Number(s.totalChargers) || 0)),
+      chargerTypes: (Array.isArray(s.capacity?.chargerTypes) && s.capacity.chargerTypes.length > 0)
+        ? s.capacity.chargerTypes.map((t) => (typeof t === 'string' ? t : (t?.type || null))).filter(Boolean)
+        : (Array.isArray(s.chargers) ? [...new Set(s.chargers.map(c => c.type).filter(Boolean))] : []),
       basePrice: s.pricing?.basePrice || 0,
       amenities: s.amenities || [],
-      status: s.operational?.isOperational === false ? 'offline' : (s.status || 'operational'),
+      status: s.operational?.status || 'active',
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
     }));

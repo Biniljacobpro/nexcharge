@@ -398,10 +398,10 @@ export const addStation = async (req, res) => {
         message: 'Pincode is required'
       });
     }
-    if (!totalChargers || totalChargers < 1) {
+    if (!totalChargers || totalChargers < 1 || totalChargers > 50) {
       return res.status(400).json({
         success: false,
-        message: 'Total chargers must be at least 1'
+        message: 'Total chargers must be between 1 and 50'
       });
     }
     if (!chargerTypes || !Array.isArray(chargerTypes) || chargerTypes.length === 0) {
@@ -410,22 +410,28 @@ export const addStation = async (req, res) => {
         message: 'At least one charger type must be selected'
       });
     }
-    if (!maxPowerPerCharger || maxPowerPerCharger <= 0) {
+    if (!maxPowerPerCharger || maxPowerPerCharger < 1 || maxPowerPerCharger > 500) {
       return res.status(400).json({
         success: false,
-        message: 'Max power per charger must be greater than 0'
+        message: 'Max power per charger must be between 1 and 500 kW'
       });
     }
-    if (!basePrice || basePrice < 0) {
+    if (!basePrice || basePrice < 1 || basePrice > 5000) {
       return res.status(400).json({
         success: false,
-        message: 'Base price must be 0 or greater'
+        message: 'Base price must be between 1 and 5000'
       });
     }
-    if (!parkingSlots || parkingSlots < 1) {
+    if (parkingSlots == null || parkingSlots < 0 || parkingSlots > 30) {
       return res.status(400).json({
         success: false,
-        message: 'Parking slots must be at least 1'
+        message: 'Parking slots must be between 0 and 30'
+      });
+    }
+    if (parkingFee != null && (parkingFee < 0 || parkingFee > 1000)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parking fee must be between 0 and 1000'
       });
     }
 
@@ -460,20 +466,20 @@ export const addStation = async (req, res) => {
         nearbyLandmarks: nearbyLandmarks?.trim() || ''
       },
       capacity: {
-        totalChargers: parseInt(totalChargers),
+        totalChargers: Math.min(50, Math.max(1, parseInt(totalChargers))),
         chargerTypes: chargerTypes,
-        maxPowerPerCharger: parseFloat(maxPowerPerCharger),
+        maxPowerPerCharger: Math.min(500, Math.max(1, parseFloat(maxPowerPerCharger))),
         totalPowerCapacity: parseFloat(totalPowerCapacity) || (parseInt(totalChargers) * parseFloat(maxPowerPerCharger))
       },
       pricing: {
         model: pricingModel,
-        basePrice: parseFloat(basePrice),
+        basePrice: Math.min(5000, Math.max(1, parseFloat(basePrice))),
         cancellationPolicy: cancellationPolicy?.trim() || ''
       },
       operational: {
         status: status,
-        parkingSlots: parseInt(parkingSlots),
-        parkingFee: parseFloat(parkingFee) || 0,
+        parkingSlots: Math.min(30, Math.max(0, parseInt(parkingSlots))),
+        parkingFee: Math.min(1000, Math.max(0, parseFloat(parkingFee) || 0)),
         operatingHours: {
           is24Hours: Boolean(is24Hours),
           customHours: {

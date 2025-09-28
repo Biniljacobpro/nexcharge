@@ -8,7 +8,10 @@ import {
   addFranchiseOwner,
   updateFranchiseOwner,
   deleteFranchiseOwner,
-  getCorporateStations
+  getCorporateStations,
+  updateCorporateStationStatus,
+  getCorporateInfo,
+  updateCorporateName
 } from '../controllers/corporate.controller.js';
 
 const router = Router();
@@ -21,6 +24,10 @@ router.get('/dashboard', getDashboardData);
 router.get('/analytics', getAnalytics);
 router.get('/bookings/recent', getRecentBookings);
 
+// Corporate profile/info routes
+router.get('/info', getCorporateInfo);
+router.patch('/info/name', updateCorporateName);
+
 // Franchise management routes
 router.get('/franchises', getFranchiseOwners);
 router.post('/franchises', addFranchiseOwner);
@@ -29,6 +36,7 @@ router.delete('/franchises/:franchiseId', deleteFranchiseOwner);
 
 // Stations under this corporate
 router.get('/stations', getCorporateStations);
+router.patch('/stations/:id/status', updateCorporateStationStatus);
 
 
 export default router;

@@ -72,6 +72,7 @@ import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import stationManagerService from '../services/stationManagerService';
+import Footer from '../components/Footer';
 
 const drawerWidth = 280;
 
@@ -240,7 +241,7 @@ const StationManagerDashboard = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #00E6B6, #00B894)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -260,7 +261,7 @@ const StationManagerDashboard = () => {
 
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #2D5A87, #4A7BA7)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -280,7 +281,7 @@ const StationManagerDashboard = () => {
 
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #F59E0B, #FBBF24)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -300,7 +301,7 @@ const StationManagerDashboard = () => {
 
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card sx={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: 'white' }}>
+            <Card sx={{ background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: 'white' }}>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -329,7 +330,21 @@ const StationManagerDashboard = () => {
                   Assigned Stations ({dashboardData?.assignedStations?.length || 0})
                 </Typography>
                 {dashboardData?.assignedStations?.map((station, index) => (
-                  <Box key={station.id} sx={{ mb: 3, p: 3, border: '1px solid', borderColor: 'grey.200', borderRadius: 2, backgroundColor: 'grey.50' }}>
+                  <Box
+                    key={station.id}
+                    onClick={() => navigate(`/station-manager/stations/${station.id}`)}
+                    sx={{
+                      mb: 3,
+                      p: 3,
+                      border: '1px solid',
+                      borderColor: 'grey.200',
+                      borderRadius: 2,
+                      backgroundColor: 'grey.50',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': { boxShadow: 3, borderColor: 'primary.light', backgroundColor: '#ffffff' }
+                    }}
+                  >
                     {/* Station Header */}
                     <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                       <Box display="flex" alignItems="center" gap={1}>
@@ -1160,7 +1175,7 @@ const StationManagerDashboard = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f8fafc' }}>
       {/* Sidebar */}
       <Drawer
         variant="permanent"
@@ -1170,21 +1185,21 @@ const StationManagerDashboard = () => {
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            background: 'linear-gradient(180deg, #2D5A87 0%, #1E3A5F 100%)',
-            color: 'white'
+            bgcolor: '#ffffff',
+            borderRight: '1px solid #e2e8f0',
           },
           display: { xs: 'none', md: 'block' }
         }}
       >
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
             NexCharge
           </Typography>
-          <Typography variant="body2" sx={{ color: 'grey.300' }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             Station Manager Portal
           </Typography>
         </Box>
-        <Divider sx={{ borderColor: 'grey.600' }} />
+        <Divider sx={{ borderColor: '#e2e8f0' }} />
         <List>
           {navigationItems.map((item) => (
             <ListItem key={item.id} disablePadding>
@@ -1192,24 +1207,24 @@ const StationManagerDashboard = () => {
                 selected={activeSection === item.id}
                 onClick={() => setActiveSection(item.id)}
                 sx={{
+                  mb: 0.5,
+                  borderRadius: 1,
                   '&.Mui-selected': {
-                    backgroundColor: 'primary.main',
-                    '&:hover': {
-                      backgroundColor: 'primary.dark'
-                    }
+                    bgcolor: '#f1f5f9',
+                    '&:hover': { bgcolor: '#f1f5f9' },
+                    color: '#1e293b'
                   },
-                  '&:hover': {
-                    backgroundColor: 'grey.600'
-                  }
+                  '&:hover': { bgcolor: '#f8fafc' }
                 }}
               >
-                <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                <ListItemIcon sx={{ color: activeSection === item.id ? '#1e293b' : '#64748b', minWidth: 40 }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText 
-                  primary={item.label} 
+                  primary={item.label}
+                  primaryTypographyProps={{ fontWeight: activeSection === item.id ? 600 : 400 }}
                   secondary={item.description}
-                  secondaryTypographyProps={{ fontSize: '0.75rem', color: 'grey.300' }}
+                  secondaryTypographyProps={{ fontSize: '0.75rem', color: 'text.secondary' }}
                 />
               </ListItemButton>
             </ListItem>
@@ -1220,7 +1235,7 @@ const StationManagerDashboard = () => {
       {/* Main Content */}
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Top Bar */}
-        <AppBar position="static" sx={{ backgroundColor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+        <AppBar position="static" sx={{ bgcolor: '#ffffff', borderBottom: '1px solid #e2e8f0', boxShadow: 'none' }}>
           <Toolbar>
             <IconButton
               color="inherit"
@@ -1231,7 +1246,7 @@ const StationManagerDashboard = () => {
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1, color: 'text.primary' }}>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1, color: 'text.primary', fontWeight: 700 }}>
               Station Manager Dashboard
             </Typography>
             <Box display="flex" alignItems="center" gap={2}>
@@ -1269,6 +1284,9 @@ const StationManagerDashboard = () => {
         <Box sx={{ flexGrow: 1, p: 3 }}>
           {renderContent()}
         </Box>
+
+        {/* Footer */}
+        <Footer />
       </Box>
 
       {/* Snackbar for notifications */}

@@ -2,6 +2,8 @@ import User from '../models/user.model.js';
 import bcryptjs from 'bcryptjs';
 import { sendCorporateAdminWelcomeEmail } from '../utils/emailService.js';
 import Corporate from '../models/corporate.model.js';
+import Station from '../models/station.model.js';
+import Franchise from '../models/franchise.model.js';
 
 export const overview = async (_req, res) => {
 	try {
@@ -15,6 +17,102 @@ export const overview = async (_req, res) => {
 	}
 };
 
+// Admin: List stations with corporate/franchise filters
+export const listStations = async (req, res) => {
+  try {
+    const { corporateId, franchiseId, status, city, state, q } = req.query;
+    const query = {};
+    if (corporateId) query.corporateId = corporateId;
+    if (franchiseId) query.franchiseId = franchiseId;
+    if (status) query['operational.status'] = status;
+    if (city) query['location.city'] = new RegExp(`^${city}$`, 'i');
+    if (state) query['location.state'] = new RegExp(`^${state}$`, 'i');
+    if (q) query.name = { $regex: q, $options: 'i' };
+
+    const stations = await Station.find(query)
+      .populate('corporateId', 'name')
+      .populate('franchiseId', 'name')
+      .populate('managerId', 'personalInfo.firstName personalInfo.lastName personalInfo.email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const data = stations.map(s => ({
+      id: s._id,
+      name: s.name,
+      code: s.code,
+      corporate: s.corporateId ? { id: s.corporateId._id, name: s.corporateId.name } : null,
+      franchise: s.franchiseId ? { id: s.franchiseId._id, name: s.franchiseId.name } : null,
+      manager: s.managerId ? {
+        id: s.managerId._id,
+        name: `${s.managerId?.personalInfo?.firstName || ''} ${s.managerId?.personalInfo?.lastName || ''}`.trim(),
+        email: s.managerId?.personalInfo?.email || ''
+      } : null,
+      location: {
+        address: s.location?.address,
+        city: s.location?.city,
+        state: s.location?.state,
+        pincode: s.location?.pincode
+      },
+      capacity: {
+        totalChargers: (s.capacity?.totalChargers != null)
+          ? s.capacity.totalChargers
+          : (Array.isArray(s.chargers) ? s.chargers.length : (typeof s.totalChargers === 'number' ? s.totalChargers : 0)),
+        chargerTypes: (Array.isArray(s.capacity?.chargerTypes) && s.capacity.chargerTypes.length > 0)
+          ? s.capacity.chargerTypes.map(t => (typeof t === 'string' ? t : (t?.type || null))).filter(Boolean)
+          : (Array.isArray(s.chargers) ? [...new Set(s.chargers.map(c => c.type).filter(Boolean))] : []),
+        availableSlots: s.capacity?.availableSlots
+      },
+      pricing: { basePrice: s.pricing?.basePrice },
+      status: s.operational?.status || 'active',
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt
+    }));
+
+    return res.json({ success: true, data });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Failed to list stations', error: e.message });
+  }
+};
+
+// Admin: Update station operational status
+export const updateStationStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!['active', 'inactive', 'maintenance'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+    const station = await Station.findByIdAndUpdate(
+      id,
+      { $set: { 'operational.status': status } },
+      { new: true }
+    );
+    if (!station) return res.status(404).json({ success: false, message: 'Station not found' });
+    return res.json({ success: true, data: { id: station._id, status: station.operational?.status } });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Failed to update status', error: e.message });
+  }
+};
+
+// Admin: Assign or change station manager
+export const updateStationManager = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { managerId } = req.body;
+    if (!managerId) return res.status(400).json({ success: false, message: 'managerId is required' });
+    const manager = await User.findById(managerId);
+    if (!manager) return res.status(404).json({ success: false, message: 'Manager user not found' });
+    const station = await Station.findByIdAndUpdate(
+      id,
+      { $set: { managerId } },
+      { new: true }
+    );
+    if (!station) return res.status(404).json({ success: false, message: 'Station not found' });
+    return res.json({ success: true, data: { id: station._id, managerId: station.managerId } });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Failed to update manager', error: e.message });
+  }
+};
 export const listUsers = async (_req, res) => {
 	try {
 		const users = await User.find({}, { 'personalInfo.firstName': 1, 'personalInfo.lastName': 1, 'personalInfo.email': 1, role: 1, createdAt: 1 }).limit(200).sort({ createdAt: -1 });

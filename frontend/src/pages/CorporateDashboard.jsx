@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Container,
@@ -114,6 +114,7 @@ const CorporateDashboard = () => {
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [franchises, setFranchises] = useState([]);
+  const [deleteFranchiseDlg, setDeleteFranchiseDlg] = useState({ open: false, franchise: null, status: 'idle', error: '' });
 
   // State for data
   const [dashboardData, setDashboardData] = useState({
@@ -135,6 +136,11 @@ const CorporateDashboard = () => {
   });
   const [corporateStations, setCorporateStations] = useState([]);
 
+  // Corporate info state (for company name editing)
+  const [corporateInfo, setCorporateInfo] = useState(null);
+  const [corpName, setCorpName] = useState('');
+  const [corpInfoLoading, setCorpInfoLoading] = useState(false);
+
   // Profile state
   const [user, setUser] = useState(null);
   const [profileForm, setProfileForm] = useState({
@@ -155,6 +161,8 @@ const CorporateDashboard = () => {
   const [passwordError, setPasswordError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [profileImageLoading, setProfileImageLoading] = useState(false);
+  const [profileImagePreview, setProfileImagePreview] = useState('');
 
   // Navigation items
   const navigationItems = [
@@ -175,6 +183,7 @@ const CorporateDashboard = () => {
     loadAnalytics();
     loadCorporateStations();
     loadUserProfile();
+    loadCorporateInfo();
   }, []);
 
   const loadUserProfile = async () => {
@@ -188,6 +197,8 @@ const CorporateDashboard = () => {
         phone: userData.phone || '',
         address: userData.address || ''
       });
+      const currentImg = userData.profileImage || userData.personalInfo?.profileImage || '';
+      setProfileImagePreview(currentImg);
     } catch (error) {
       console.error('Error loading user profile:', error);
       setSnackbar({ open: true, message: 'Error loading profile', severity: 'error' });
@@ -251,6 +262,58 @@ const CorporateDashboard = () => {
     }
   };
 
+  const loadCorporateInfo = async () => {
+    try {
+      setCorpInfoLoading(true);
+      const res = await corporateService.getCorporateInfo();
+      if (res?.success) {
+        setCorporateInfo(res.data);
+        setCorpName(res.data?.name || '');
+      }
+    } catch (error) {
+      console.error('Error loading corporate info:', error);
+      setSnackbar({ open: true, message: 'Error loading corporate info', severity: 'error' });
+    } finally {
+      setCorpInfoLoading(false);
+    }
+  };
+
+  const handleCorporateNameSave = async (e) => {
+    e.preventDefault();
+    if (!corpName || !corpName.trim()) {
+      setSnackbar({ open: true, message: 'Company name cannot be empty', severity: 'warning' });
+      return;
+    }
+    try {
+      setCorpInfoLoading(true);
+      const res = await corporateService.updateCorporateName(corpName.trim());
+      if (res?.success) {
+        setCorporateInfo(res.data);
+        setCorpName(res.data?.name || corpName.trim());
+        setSnackbar({ open: true, message: 'Company name updated', severity: 'success' });
+      }
+    } catch (error) {
+      setSnackbar({ open: true, message: error.message || 'Failed to update company name', severity: 'error' });
+    } finally {
+      setCorpInfoLoading(false);
+    }
+  };
+
+  // Update station status (active, maintenance, inactive)
+  const handleCorporateStationStatusChange = async (stationId, nextStatus) => {
+    try {
+      setLoading(true);
+      await corporateService.updateCorporateStationStatus(stationId, nextStatus);
+      setSnackbar({ open: true, message: 'Station status updated', severity: 'success' });
+      // Refresh the list to reflect the change
+      await loadCorporateStations();
+    } catch (e) {
+      setSnackbar({ open: true, message: e.message || 'Failed to update status', severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const handleFranchiseDialog = (mode, franchise = null) => {
     setFranchiseDialog({ open: true, mode, franchise });
@@ -294,18 +357,30 @@ const CorporateDashboard = () => {
     }
   };
 
-  const handleDeleteFranchise = async (franchiseId) => {
-    if (window.confirm('Are you sure you want to delete this franchise?')) {
-      setLoading(true);
-      try {
-        await corporateService.deleteFranchiseOwner(franchiseId);
-        setSnackbar({ open: true, message: 'Franchise deleted successfully', severity: 'success' });
-        loadFranchises(); // Reload franchises list
-      } catch (error) {
-        setSnackbar({ open: true, message: error.message || 'Error deleting franchise', severity: 'error' });
-      } finally {
-        setLoading(false);
-      }
+  const openDeleteFranchiseDialog = (franchise) => {
+    setDeleteFranchiseDlg({ open: true, franchise, status: 'idle', error: '' });
+  };
+
+  const closeDeleteFranchiseDialog = () => {
+    setDeleteFranchiseDlg({ open: false, franchise: null, status: 'idle', error: '' });
+  };
+
+  const confirmDeleteFranchise = async () => {
+    const franchise = deleteFranchiseDlg.franchise;
+    if (!franchise) return;
+    setDeleteFranchiseDlg((d) => ({ ...d, status: 'loading', error: '' }));
+    try {
+      await corporateService.deleteFranchiseOwner(franchise.id);
+      setSnackbar({ open: true, message: 'Franchise deleted successfully', severity: 'success' });
+      // Optimistically update the UI
+      setFranchises((prev) => prev.filter((f) => f.id !== franchise.id));
+      closeDeleteFranchiseDialog();
+      // Refresh lists and KPI cards
+      loadFranchises();
+      loadDashboardData();
+    } catch (error) {
+      // Show backend reason, e.g., stations/managers exist
+      setDeleteFranchiseDlg((d) => ({ ...d, status: 'error', error: error.message || 'Error deleting franchise' }));
     }
   };
 
@@ -357,6 +432,42 @@ const CorporateDashboard = () => {
       setPasswordError(error.message || 'Failed to update password');
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  // Profile image handlers (upload/remove)
+  const fileInputRef = useRef(null);
+  const handleChooseImage = () => fileInputRef.current?.click();
+
+  const handleProfileImageSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const localUrl = URL.createObjectURL(file);
+    setProfileImagePreview(localUrl);
+    setProfileImageLoading(true);
+    try {
+      await api.uploadProfileImageApi(file);
+      setSnackbar({ open: true, message: 'Profile picture updated', severity: 'success' });
+      await loadUserProfile();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'Failed to update profile picture', severity: 'error' });
+      await loadUserProfile();
+    } finally {
+      setProfileImageLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveProfileImage = async () => {
+    setProfileImageLoading(true);
+    try {
+      await api.updateProfileImageApi('');
+      setSnackbar({ open: true, message: 'Profile picture removed', severity: 'success' });
+      await loadUserProfile();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'Failed to remove profile picture', severity: 'error' });
+    } finally {
+      setProfileImageLoading(false);
     }
   };
 
@@ -532,12 +643,31 @@ const CorporateDashboard = () => {
             <Grid item xs={12} sm={6} md={4} key={s.id}>
               <Card sx={{ height: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
                 <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>{s.name || 'Unnamed Station'}</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name || 'Unnamed Station'}</Typography>
                       <Typography variant="caption" color="text.secondary">Code: {s.code || '-'}</Typography>
                     </Box>
-                    <Chip size="small" label={s.status === 'offline' ? 'Offline' : 'Operational'} color={s.status === 'offline' ? 'warning' : 'success'} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip
+                        size="small"
+                        label={s.status}
+                        color={s.status === 'active' ? 'success' : (s.status === 'maintenance' ? 'warning' : 'default')}
+                      />
+                      <FormControl size="small" sx={{ minWidth: 130 }}>
+                        <InputLabel id={`status-label-${s.id}`}>Status</InputLabel>
+                        <Select
+                          labelId={`status-label-${s.id}`}
+                          label="Status"
+                          value={s.status || ''}
+                          onChange={(e) => handleCorporateStationStatusChange(s.id, e.target.value)}
+                        >
+                          <MenuItem value="active">Active</MenuItem>
+                          <MenuItem value="maintenance">Maintenance</MenuItem>
+                          <MenuItem value="inactive">Inactive</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
                   </Box>
 
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
@@ -598,6 +728,27 @@ const CorporateDashboard = () => {
         </Grid>
       </Box>
     </Box>
+  );
+
+  // Delete Franchise confirmation dialog
+  const DeleteFranchiseDialog = () => (
+    <Dialog open={deleteFranchiseDlg.open} onClose={closeDeleteFranchiseDialog} maxWidth="xs" fullWidth>
+      <DialogTitle>Delete Franchise Owner</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2">
+          Are you sure you want to delete {deleteFranchiseDlg.franchise?.name || 'this franchise owner'}?
+        </Typography>
+        {deleteFranchiseDlg.status === 'error' && (
+          <Alert severity="error" sx={{ mt: 2 }}>{deleteFranchiseDlg.error}</Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={closeDeleteFranchiseDialog} disabled={deleteFranchiseDlg.status === 'loading'}>Cancel</Button>
+        <Button color="error" variant="contained" onClick={confirmDeleteFranchise} disabled={deleteFranchiseDlg.status === 'loading'}>
+          {deleteFranchiseDlg.status === 'loading' ? <CircularProgress size={18} sx={{ color: 'white' }} /> : 'Delete'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 
   const renderFranchiseManagement = () => (
@@ -673,9 +824,19 @@ const CorporateDashboard = () => {
                       <IconButton size="small" onClick={() => handleFranchiseDialog('edit', franchise)}>
                         <EditIcon />
                       </IconButton>
-                      <IconButton size="small" onClick={() => handleDeleteFranchise(franchise.id)}>
-                        <DeleteIcon />
-                      </IconButton>
+                      {franchise.stations > 0 ? (
+                        <Tooltip title="Cannot delete: this franchise has stations. Transfer/remove stations and unassign managers first.">
+                          <span>
+                            <IconButton size="small" disabled>
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <IconButton size="small" onClick={() => openDeleteFranchiseDialog(franchise)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
                       <IconButton size="small">
                         <VisibilityIcon />
                       </IconButton>
@@ -763,12 +924,31 @@ const CorporateDashboard = () => {
               <Grid item xs={12} sm={6} md={4} key={s.id}>
                 <Card sx={{ height: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
                   <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>{s.name || 'Unnamed Station'}</Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name || 'Unnamed Station'}</Typography>
                         <Typography variant="caption" color="text.secondary">Code: {s.code || '-'}</Typography>
                       </Box>
-                      <Chip size="small" label={s.status === 'offline' ? 'Offline' : 'Operational'} color={s.status === 'offline' ? 'warning' : 'success'} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip
+                          size="small"
+                          label={s.status}
+                          color={s.status === 'active' ? 'success' : (s.status === 'maintenance' ? 'warning' : 'default')}
+                        />
+                        <FormControl size="small" sx={{ minWidth: 130 }}>
+                          <InputLabel id={`status2-label-${s.id}`}>Status</InputLabel>
+                          <Select
+                            labelId={`status2-label-${s.id}`}
+                            label="Status"
+                            value={s.status || ''}
+                            onChange={(e) => handleCorporateStationStatusChange(s.id, e.target.value)}
+                          >
+                            <MenuItem value="active">Active</MenuItem>
+                            <MenuItem value="maintenance">Maintenance</MenuItem>
+                            <MenuItem value="inactive">Inactive</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Box>
                     </Box>
 
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
@@ -1032,6 +1212,31 @@ const CorporateDashboard = () => {
               </Typography>
               {profileError && <Alert severity="error" sx={{ mb: 2 }}>{profileError}</Alert>}
               {profileSuccess && <Alert severity="success" sx={{ mb: 2 }}>{profileSuccess}</Alert>}
+              {/* Profile Picture */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <Avatar
+                  src={profileImagePreview || undefined}
+                  alt={user?.firstName || 'User'}
+                  sx={{ width: 72, height: 72 }}
+                >
+                  {(user?.firstName || 'U')[0]}
+                </Avatar>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handleProfileImageSelected}
+                  />
+                  <Button variant="outlined" onClick={handleChooseImage} disabled={profileImageLoading}>
+                    {profileImageLoading ? <CircularProgress size={18} /> : 'Upload New'}
+                  </Button>
+                  <Button color="error" variant="text" onClick={handleRemoveProfileImage} disabled={profileImageLoading || !profileImagePreview}>
+                    Remove
+                  </Button>
+                </Box>
+              </Box>
               <Box component="form" onSubmit={handleProfileSubmit}>
                 <TextField
                   fullWidth
@@ -1133,6 +1338,33 @@ const CorporateDashboard = () => {
                   disabled={passwordLoading}
                 >
                   {passwordLoading ? <CircularProgress size={20} /> : 'Change Password'}
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+          <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)', mt: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Corporate Information
+              </Typography>
+              <Box component="form" onSubmit={handleCorporateNameSave}>
+                <TextField
+                  fullWidth
+                  label="Company Name"
+                  value={corpName}
+                  onChange={(e) => setCorpName(e.target.value)}
+                  margin="normal"
+                  required
+                  helperText={corporateInfo?.businessRegistrationNumber ? `BRN: ${corporateInfo.businessRegistrationNumber}` : ''}
+                />
+                <Button
+                  type="submit"
+                  variant="contained"
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  disabled={corpInfoLoading}
+                >
+                  {corpInfoLoading ? <CircularProgress size={20} /> : 'Save Company Name'}
                 </Button>
               </Box>
             </CardContent>
@@ -1250,7 +1482,10 @@ const CorporateDashboard = () => {
             </IconButton>
             
             <IconButton onClick={handleUserMenuOpen}>
-              <Avatar sx={{ width: 32, height: 32, bgcolor: '#4caf50' }}>
+              <Avatar
+                src={user?.profileImage || user?.personalInfo?.profileImage || undefined}
+                sx={{ width: 32, height: 32, bgcolor: '#4caf50' }}
+              >
                 {user?.firstName?.charAt(0) || 'C'}
               </Avatar>
             </IconButton>
@@ -1260,13 +1495,13 @@ const CorporateDashboard = () => {
               open={Boolean(userMenuAnchor)}
               onClose={handleUserMenuClose}
             >
-              <MenuItemComponent onClick={handleUserMenuClose}>
+              <MenuItemComponent onClick={() => { setActiveSection('profile'); handleUserMenuClose(); }}>
                 <ListItemIcon>
                   <PersonIcon fontSize="small" />
                 </ListItemIcon>
                 Profile
               </MenuItemComponent>
-              <MenuItemComponent onClick={handleUserMenuClose}>
+              <MenuItemComponent onClick={() => { setActiveSection('settings'); handleUserMenuClose(); }}>
                 <ListItemIcon>
                   <SettingsIcon fontSize="small" />
                 </ListItemIcon>
@@ -1361,6 +1596,9 @@ const CorporateDashboard = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Franchise Confirmation Dialog */}
+      <DeleteFranchiseDialog />
 
 
       <Snackbar

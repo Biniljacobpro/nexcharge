@@ -12,7 +12,11 @@ import {
   updateProfileImage,
   uploadProfileImage,
   checkEmailAvailability,
-  updateUserVehicle
+  updateUserVehicle,
+  getMyVehicles,
+  addUserVehicle,
+  removeUserVehicle,
+  updateUserVehicleAtIndex
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middlewares/auth.js';
 import upload from '../middlewares/upload.js';
@@ -33,6 +37,10 @@ router.get('/check-email', checkEmailAvailability);
 // Profile management routes
 router.put('/profile', requireAuth, updateProfile);
 router.put('/user-vehicle', requireAuth, updateUserVehicle);
+router.get('/my-vehicles', requireAuth, getMyVehicles);
+router.post('/my-vehicles', requireAuth, addUserVehicle);
+router.delete('/my-vehicles/:index', requireAuth, removeUserVehicle);
+router.put('/my-vehicles/:index', requireAuth, updateUserVehicleAtIndex);
 router.put('/password', requireAuth, updatePassword);
 router.put('/profile-image', requireAuth, updateProfileImage);
 router.post('/upload-profile-image', requireAuth, upload.single('profileImage'), uploadProfileImage);

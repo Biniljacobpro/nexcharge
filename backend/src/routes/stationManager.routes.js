@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireAuth, requireRole } from '../middlewares/auth.js';
+import upload from '../middlewares/upload.js';
 import {
   getDashboardData,
   getBookings,
@@ -9,7 +10,11 @@ import {
   createMaintenanceTask,
   updateMaintenanceTask,
   getFeedback,
-  respondToFeedback
+  respondToFeedback,
+  getStationDetails,
+  updateStationDetails,
+  uploadStationImages,
+  deleteStationImage
 } from '../controllers/stationManager.controller.js';
 
 const router = express.Router();
@@ -23,6 +28,12 @@ router.get('/dashboard', getDashboardData);
 router.get('/bookings', getBookings);
 router.patch('/bookings/:id/status', updateBookingStatus);
 router.get('/reports', getReports);
+
+// Station details management
+router.get('/stations/:id', getStationDetails);
+router.patch('/stations/:id', updateStationDetails);
+router.post('/stations/:id/images', upload.array('images', 6), uploadStationImages);
+router.delete('/stations/:id/images', deleteStationImage);
 
 // Maintenance routes
 router.get('/maintenance', getMaintenanceSchedule);

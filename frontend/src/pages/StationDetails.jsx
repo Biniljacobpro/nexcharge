@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getMe, getMyVehiclesApi } from '../utils/api';
 import {
   Box,
   Container,
@@ -26,7 +27,7 @@ import {
   Stack,
   Rating
 } from '@mui/material';
-import Navbar from '../components/Navbar';
+import UserNavbar from '../components/UserNavbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -44,7 +45,10 @@ const StationDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [station, setStation] = useState(null);
-  const [vehicles, setVehicles] = useState([]);
+  const [myVehicles, setMyVehicles] = useState([]);
+  const [catalogVehicles, setCatalogVehicles] = useState([]); // public vehicles catalog
+  const [myBookings, setMyBookings] = useState([]);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [bookingDialog, setBookingDialog] = useState(false);
@@ -54,12 +58,14 @@ const StationDetails = () => {
     duration: '2', // Default 2 hours
     startTime: null,
     endTime: null,
-    selectedVehicleId: '',
-    currentCharge: '',
-    targetCharge: ''
+    selectedVehicleIndex: '', // index in myVehicles
+    currentCharge: '20',
+    targetCharge: '80'
   });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+  const API_ORIGIN = API_BASE.replace(/\/api$/, '');
 
   // Duration options in 30-minute increments up to 5 hours
   const DURATION_OPTIONS = [
@@ -114,38 +120,58 @@ const StationDetails = () => {
     }
   };
 
-  const loadVehicles = async () => {
+  const loadMyVehicles = async () => {
+    try {
+      const list = await getMyVehiclesApi().catch(() => []);
+      setMyVehicles(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error('Error loading my vehicles:', err);
+      setMyVehicles([]);
+    }
+  };
+
+  const loadCatalogVehicles = async () => {
     try {
       const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
       const res = await fetch(`${apiBase}/public/vehicles`);
-      if (!res.ok) throw new Error(`Failed to load vehicles: ${res.status}`);
+      if (!res.ok) throw new Error('Failed to load vehicle catalog');
       const data = await res.json();
-      if (data.success) {
-        setVehicles(data.data);
-      }
-    } catch (err) {
-      console.error('Error loading vehicles:', err);
+      setCatalogVehicles(Array.isArray(data?.data) ? data.data : []);
+    } catch (e) {
+      console.error(e);
+      setCatalogVehicles([]);
     }
+  };
+
+  const loadMyBookings = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) { setMyBookings([]); return; }
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      const res = await fetch(`${apiBase}/bookings/my-bookings?limit=5&_=${Date.now()}` , { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && data.success) setMyBookings(Array.isArray(data.data) ? data.data : []);
+    } catch (e) { console.error('Failed to load bookings', e); }
   };
 
   useEffect(() => {
     const load = async () => {
       try {
         const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
-        const [stationRes, vehiclesRes] = await Promise.all([
+        const [stationRes, userRes] = await Promise.all([
           fetch(`${apiBase}/public/stations/${id}`),
-          fetch(`${apiBase}/public/vehicles`)
+          getMe().catch(() => null)
         ]);
         
         if (!stationRes.ok) throw new Error(`Failed to load station: ${stationRes.status}`);
         const stationData = await stationRes.json();
         setStation(stationData?.data);
 
-        if (vehiclesRes.ok) {
-          const vehiclesData = await vehiclesRes.json();
-          if (vehiclesData.success) {
-            setVehicles(vehiclesData.data);
-          }
+        // Load user's vehicles and catalog vehicles
+        await Promise.all([loadMyVehicles(), loadCatalogVehicles(), loadMyBookings()]);
+
+        if (userRes) {
+          setUser(userRes);
         }
       } catch (e) {
         setError(e.message);
@@ -160,7 +186,7 @@ const StationDetails = () => {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
         <AnimatedBackground />
-        <Navbar />
+        <UserNavbar user={user} />
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <CircularProgress />
         </Box>
@@ -169,8 +195,25 @@ const StationDetails = () => {
   }
 
   const handleBookingSubmit = async () => {
-    if (!bookingForm.chargerType || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.selectedVehicleId) {
+    if (!bookingForm.chargerType || !bookingForm.startTime || !bookingForm.endTime || bookingForm.selectedVehicleIndex === '') {
       setSnackbar({ open: true, message: 'Please fill all required fields including vehicle selection', severity: 'error' });
+      return;
+    }
+    // Validate charge fields
+    const curr = Number(bookingForm.currentCharge);
+    const targ = Number(bookingForm.targetCharge);
+    if (Number.isNaN(curr) || Number.isNaN(targ) || curr < 0 || curr > 100 || targ < 0 || targ > 100 || curr >= targ) {
+      setSnackbar({ open: true, message: 'Enter valid charge levels (0-100) and ensure Target > Current', severity: 'error' });
+      return;
+    }
+
+    // Map selected user vehicle to catalog vehicle ID (by make+model)
+    const idx = Number(bookingForm.selectedVehicleIndex);
+    const sel = myVehicles[idx];
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const catalogMatch = catalogVehicles.find(cv => norm(cv.make) === norm(sel?.make) && norm(cv.model) === norm(sel?.model));
+    if (!catalogMatch?._id) {
+      setSnackbar({ open: true, message: 'Selected vehicle not found in catalog. Please contact support.', severity: 'error' });
       return;
     }
 
@@ -190,9 +233,9 @@ const StationDetails = () => {
           chargerType: bookingForm.chargerType,
           startTime: new Date(bookingForm.startTime).toISOString(),
           endTime: new Date(bookingForm.endTime).toISOString(),
-          vehicleId: bookingForm.selectedVehicleId,
-          currentCharge: bookingForm.currentCharge,
-          targetCharge: bookingForm.targetCharge
+          vehicleId: catalogMatch._id,
+          currentCharge: curr,
+          targetCharge: targ
         })
       });
 
@@ -201,8 +244,8 @@ const StationDetails = () => {
       if (result.success) {
         setSnackbar({ open: true, message: 'Booking created successfully!', severity: 'success' });
         setBookingDialog(false);
-        // Refresh station data
-        window.location.reload();
+        // Refresh recent bookings list
+        loadMyBookings();
       } else {
         setSnackbar({ open: true, message: result.message || 'Failed to create booking', severity: 'error' });
       }
@@ -242,7 +285,7 @@ const StationDetails = () => {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
         <AnimatedBackground />
-        <Navbar />
+        <UserNavbar user={user} />
         <Container maxWidth="md" sx={{ py: 6 }}>
           <Typography color="error" sx={{ mb: 2 }}>{error || 'Station not found'}</Typography>
           <Button variant="outlined" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />}>Back</Button>
@@ -255,7 +298,7 @@ const StationDetails = () => {
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
       <AnimatedBackground />
-      <Navbar />
+      <UserNavbar user={user} />
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Back Button */}
@@ -269,6 +312,11 @@ const StationDetails = () => {
           >
             Back to Map
           </Button>
+          {station.operational?.status === 'maintenance' && (
+            <Alert severity="warning" sx={{ mt: 1 }}>
+              🚧 This station is currently under maintenance. Booking is temporarily unavailable.
+            </Alert>
+          )}
         </Box>
 
         {/* Enhanced Hero Section */}
@@ -346,8 +394,12 @@ const StationDetails = () => {
                   border: '1px solid rgba(255,255,255,0.2)'
                 }}>
                   <Chip
-                    label={station.capacity?.availableSlots > 0 ? `⚡ ${station.capacity.availableSlots} Available` : '🚫 Full'}
-                    color={station.capacity?.availableSlots > 0 ? "success" : "error"}
+                    label={station.operational?.status === 'maintenance' 
+                      ? '🚧 Under maintenance' 
+                      : (station.capacity?.availableSlots > 0 ? `⚡ ${station.capacity.availableSlots} Available` : '🚫 Full')}
+                    color={station.operational?.status === 'maintenance' 
+                      ? 'warning' 
+                      : (station.capacity?.availableSlots > 0 ? 'success' : 'error')}
                     variant="filled"
                     sx={{
                       fontSize: '1rem',
@@ -624,6 +676,13 @@ const StationDetails = () => {
                 <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
                   💰 Pricing & Booking
                 </Typography>
+                {station.operational?.status === 'maintenance' && (
+                  <Box sx={{ mb: 3, p: 2, bgcolor: '#fff7ed', borderRadius: 2, border: '1px solid #f59e0b' }}>
+                    <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 600 }}>
+                      This station is under maintenance. Booking is disabled.
+                    </Typography>
+                  </Box>
+                )}
 
                 {/* Price Highlight Box */}
                 <Box sx={{
@@ -711,30 +770,36 @@ const StationDetails = () => {
                     variant="contained"
                     size="large"
                     onClick={() => setBookingDialog(true)}
-                    disabled={station.capacity?.availableSlots === 0}
+                    disabled={station.operational?.status !== 'active' || station.capacity?.availableSlots === 0}
                     fullWidth
                     sx={{
                       borderRadius: 3,
                       py: 1.5,
                       fontSize: '1.1rem',
                       fontWeight: 600,
-                      background: station.capacity?.availableSlots === 0
-                        ? '#dc2626'
-                        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: station.operational?.status === 'maintenance'
+                        ? '#f59e0b'
+                        : (station.capacity?.availableSlots === 0
+                          ? '#dc2626'
+                          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
                       '&:hover': {
-                        background: station.capacity?.availableSlots === 0
-                          ? '#b91c1c'
-                          : 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+                        background: station.operational?.status === 'maintenance'
+                          ? '#d97706'
+                          : (station.capacity?.availableSlots === 0
+                            ? '#b91c1c'
+                            : 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)'),
                         transform: 'translateY(-2px)',
                         boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
                       },
                       '&:disabled': {
-                        background: '#dc2626',
+                        background: station.operational?.status === 'maintenance' ? '#f59e0b' : '#dc2626',
                         color: 'white'
                       }
                     }}
                   >
-                    {station.capacity?.availableSlots === 0 ? '🚫 Station Full' : '⚡ Book Now'}
+                    {station.operational?.status === 'maintenance'
+                      ? '🚧 Under maintenance'
+                      : (station.capacity?.availableSlots === 0 ? '🚫 Station Full' : '⚡ Book Now')}
                   </Button>
                 </Stack>
 
@@ -747,6 +812,52 @@ const StationDetails = () => {
               </CardContent>
             </Card>
 
+            {/* My Recent Bookings */}
+            <Card sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', mb: 3 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#1f2937' }}>
+                  My Recent Bookings
+                </Typography>
+                {(!myBookings || myBookings.length === 0) ? (
+                  <Typography variant="body2" color="text.secondary">No recent bookings.</Typography>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {myBookings.map((b) => {
+                      const now = new Date();
+                      const start = new Date(b.startTime);
+                      const end = new Date(b.endTime);
+                      const isPast = end < now;
+                      const isUpcoming = start > now;
+                      const isCancelled = b.status === 'cancelled';
+                      const isCompleted = b.status === 'completed';
+                      const label = isCancelled ? 'cancelled' : (isCompleted ? 'completed' : (isPast ? 'past' : (isUpcoming ? 'upcoming' : 'ongoing')));
+                      const chipColor = isCancelled ? 'error' : (isCompleted ? 'default' : (isPast ? 'default' : (isUpcoming ? 'primary' : 'success')));
+                      return (
+                        <Box key={b._id} sx={{ p: 1.5, border: '1px solid #e5e7eb', borderRadius: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                            <Box>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                {b.stationId?.name || 'Station'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {start.toLocaleString()} → {end.toLocaleString()}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip size="small" color={chipColor} label={label} />
+                              {isUpcoming && !isCancelled && (
+                                <Button size="small" variant="outlined" onClick={() => navigate('/home')}>Edit</Button>
+                              )}
+                            </Box>
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Station Photos Section */}
             <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
               <CardContent sx={{ p: 3 }}>
@@ -754,72 +865,89 @@ const StationDetails = () => {
                   Station Photos & Gallery
                 </Typography>
                 <Grid container spacing={2}>
-                  {/* Main photo placeholder */}
+                  {/* Main photo or placeholder */}
                   <Grid item xs={12} md={8}>
-                    <Box sx={{
-                      height: 240,
-                      bgcolor: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
-                      borderRadius: 3,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      border: '3px dashed #9ca3af',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      '&::before': {
-                        content: '""',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'linear-gradient(45deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
-                      }
-                    }}>
-                      <EvStationIcon sx={{ fontSize: 64, color: '#9ca3af', mb: 2 }} />
-                      <Typography variant="h6" color="#6b7280" sx={{ fontWeight: 600, mb: 1 }}>
-                        Station Gallery
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', px: 2 }}>
-                        High-quality photos of charging bays, facilities, and surroundings coming soon
-                      </Typography>
-                    </Box>
+                    {station.images && station.images.length > 0 ? (
+                      <Box sx={{
+                        height: 320,
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        border: '1px solid #e5e7eb'
+                      }}>
+                        <img
+                          alt="station-main"
+                          src={`${API_ORIGIN}${station.images[0]}`}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        />
+                      </Box>
+                    ) : (
+                      <Box sx={{
+                        height: 240,
+                        bgcolor: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+                        borderRadius: 3,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '3px dashed #9ca3af',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: 'linear-gradient(45deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
+                        }
+                      }}>
+                        <EvStationIcon sx={{ fontSize: 64, color: '#9ca3af', mb: 2 }} />
+                        <Typography variant="h6" color="#6b7280" sx={{ fontWeight: 600, mb: 1 }}>
+                          Station Gallery
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', px: 2 }}>
+                          High-quality photos of charging bays, facilities, and surroundings coming soon
+                        </Typography>
+                      </Box>
+                    )}
                   </Grid>
 
-                  {/* Thumbnail placeholders */}
+                  {/* Thumbnails or placeholders */}
                   <Grid item xs={12} md={4}>
-                    <Stack spacing={2}>
-                      {[1, 2, 3].map((i) => (
-                        <Box key={i} sx={{
-                          height: 70,
-                          bgcolor: '#f9fafb',
-                          borderRadius: 2,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          border: '2px dashed #e5e7eb',
-                          transition: 'all 0.3s ease',
-                          '&:hover': {
-                            bgcolor: '#f3f4f6',
-                            borderColor: '#667eea'
-                          }
-                        }}>
-                          <Typography variant="caption" color="text.secondary">
-                            Photo {i}
-                          </Typography>
-                        </Box>
-                      ))}
-                    </Stack>
+                    {station.images && station.images.length > 1 ? (
+                      <Stack spacing={2}>
+                        {station.images.slice(1, 4).map((u, idx) => (
+                          <Box key={idx} sx={{ height: 96, borderRadius: 2, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                            <img alt={`thumb-${idx}`} src={`${API_ORIGIN}${u}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          </Box>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Stack spacing={2}>
+                        {[1, 2, 3].map((i) => (
+                          <Box key={i} sx={{
+                            height: 70,
+                            bgcolor: '#f9fafb',
+                            borderRadius: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: '2px dashed #e5e7eb',
+                            transition: 'all 0.3s ease',
+                            '&:hover': { bgcolor: '#f3f4f6', borderColor: '#667eea' }
+                          }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Photo {i}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
                   </Grid>
                 </Grid>
 
-                {/* Photo upload hint */}
-                <Box sx={{ mt: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e5e7eb' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-                    📸 Station photos help EV drivers make informed decisions about their charging locations
-                  </Typography>
-                </Box>
+                
               </CardContent>
             </Card>
           </Grid>
@@ -903,50 +1031,47 @@ const StationDetails = () => {
                 <FormControl fullWidth>
                   <InputLabel>Select Your Vehicle</InputLabel>
                   <Select
-                    value={bookingForm.selectedVehicleId}
+                    value={bookingForm.selectedVehicleIndex}
                     onChange={(e) => setBookingForm({
                       ...bookingForm, 
-                      selectedVehicleId: e.target.value
+                      selectedVehicleIndex: e.target.value
                     })}
                     label="Select Your Vehicle"
                   >
-                    {vehicles.map((vehicle) => (
-                      <MenuItem key={vehicle._id} value={vehicle._id}>
-                        {vehicle.displayName || `${vehicle.make} ${vehicle.model}`} 
-                        {vehicle.specifications?.year && ` (${vehicle.specifications.year})`}
-                        {vehicle.batteryCapacity && ` - ${vehicle.batteryCapacity} kWh`}
+                    {myVehicles.length === 0 ? (
+                      <MenuItem value="" disabled>
+                        No vehicles found
                       </MenuItem>
-                    ))}
+                    ) : (
+                      myVehicles.map((v, idx) => (
+                        <MenuItem key={`${v.make}-${v.model}-${idx}`} value={String(idx)}>
+                          {`${v.make || ''} ${v.model || ''}`.trim()} {v.year ? `(${v.year})` : ''} {v.batteryCapacity ? `- ${v.batteryCapacity} kWh` : ''}
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
+                {myVehicles.length === 0 && (
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                    <Button size="small" variant="outlined" onClick={() => {
+                      localStorage.setItem('openAddVehicle', '1');
+                      navigate('/home');
+                    }}>
+                      Add Vehicle
+                    </Button>
+                    <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                      You need to add a vehicle before booking
+                    </Typography>
+                  </Box>
+                )}
               </Grid>
               
               <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Current Charge Level (%)"
-                  type="number"
-                  inputProps={{ min: 0, max: 100 }}
-                  value={bookingForm.currentCharge}
-                  onChange={(e) => setBookingForm({
-                    ...bookingForm, 
-                    currentCharge: e.target.value
-                  })}
-                />
+                {/* Hidden from UI: current charge is assumed for optimization */}
               </Grid>
               
               <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Target Charge Level (%)"
-                  type="number"
-                  inputProps={{ min: 0, max: 100 }}
-                  value={bookingForm.targetCharge}
-                  onChange={(e) => setBookingForm({
-                    ...bookingForm, 
-                    targetCharge: e.target.value
-                  })}
-                />
+                {/* Hidden from UI: target charge is assumed for optimization */}
               </Grid>
             </Grid>
           </DialogContent>

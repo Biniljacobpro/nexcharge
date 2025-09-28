@@ -20,6 +20,133 @@ const sanitizeUser = (userDoc) => {
   console.log('Sanitized user data:', { id: sanitized.id, email: sanitized.email, hasPassword: !!sanitized.credentials?.passwordHash });
   return sanitized;
 };
+// Update an existing vehicle by index
+export const updateUserVehicleAtIndex = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.sub);
+    if (!user || user.role !== 'ev_user') {
+      return res.status(404).json({ success: false, message: 'EV User not found' });
+    }
+    const { index } = req.params;
+    const { make, model, year, batteryCapacity, preferredChargingType } = req.body;
+    const idx = Number(index);
+    const vehicles = user.roleSpecificData?.evUserInfo?.vehicles || [];
+    if (Number.isNaN(idx) || idx < 0 || idx >= vehicles.length) {
+      return res.status(400).json({ success: false, message: 'Invalid vehicle index' });
+    }
+    if (!make || !model || !batteryCapacity) {
+      return res.status(400).json({ success: false, message: 'make, model and batteryCapacity are required' });
+    }
+
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const target = {
+      make: String(make).trim(),
+      model: String(model).trim(),
+      year: typeof year === 'number' ? year : undefined,
+      batteryCapacity: Number(batteryCapacity),
+      preferredChargingType: preferredChargingType || undefined,
+    };
+
+    // Duplicate check excluding the same index
+    const duplicate = vehicles.some((v, i) => i !== idx &&
+      norm(v.make) === norm(target.make) &&
+      norm(v.model) === norm(target.model) &&
+      (v.year || undefined) === target.year &&
+      Number(v.batteryCapacity) === target.batteryCapacity
+    );
+    if (duplicate) {
+      return res.status(409).json({ success: false, message: 'Vehicle with same details already exists' });
+    }
+
+    vehicles[idx] = target;
+    user.roleSpecificData.evUserInfo.vehicles = vehicles;
+
+    await user.save();
+    return res.json({ success: true, message: 'Vehicle updated', data: vehicles });
+  } catch (error) {
+    console.error('Error updating user vehicle:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// List EV user's vehicles
+export const getMyVehicles = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.sub);
+    if (!user || user.role !== 'ev_user') {
+      return res.status(404).json({ success: false, message: 'EV User not found' });
+    }
+    const vehicles = user.roleSpecificData?.evUserInfo?.vehicles || [];
+    return res.json({ success: true, data: vehicles });
+  } catch (error) {
+    console.error('Error fetching user vehicles:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Add a vehicle to EV user's list
+export const addUserVehicle = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.sub);
+    if (!user || user.role !== 'ev_user') {
+      return res.status(404).json({ success: false, message: 'EV User not found' });
+    }
+    const { make, model, year, batteryCapacity, preferredChargingType } = req.body;
+    if (!make || !model || !batteryCapacity) {
+      return res.status(400).json({ success: false, message: 'make, model and batteryCapacity are required' });
+    }
+    user.roleSpecificData = user.roleSpecificData || {};
+    user.roleSpecificData.evUserInfo = user.roleSpecificData.evUserInfo || {};
+    user.roleSpecificData.evUserInfo.vehicles = user.roleSpecificData.evUserInfo.vehicles || [];
+
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const exists = user.roleSpecificData.evUserInfo.vehicles.some(v =>
+      norm(v.make) === norm(make) &&
+      norm(v.model) === norm(model) &&
+      (v.year || undefined) === (typeof year === 'number' ? year : undefined) &&
+      Number(v.batteryCapacity) === Number(batteryCapacity)
+    );
+    if (exists) {
+      return res.status(409).json({ success: false, message: 'Vehicle with same details already exists' });
+    }
+
+    user.roleSpecificData.evUserInfo.vehicles.push({
+      make: String(make),
+      model: String(model),
+      year: typeof year === 'number' ? year : undefined,
+      batteryCapacity: Number(batteryCapacity),
+      preferredChargingType: preferredChargingType || undefined,
+    });
+    await user.save();
+    return res.status(201).json({ success: true, message: 'Vehicle added', data: user.roleSpecificData.evUserInfo.vehicles });
+  } catch (error) {
+    console.error('Error adding user vehicle:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Remove a vehicle by index from EV user's list
+export const removeUserVehicle = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.sub);
+    if (!user || user.role !== 'ev_user') {
+      return res.status(404).json({ success: false, message: 'EV User not found' });
+    }
+    const { index } = req.params;
+    const idx = Number(index);
+    const arr = user.roleSpecificData?.evUserInfo?.vehicles || [];
+    if (Number.isNaN(idx) || idx < 0 || idx >= arr.length) {
+      return res.status(400).json({ success: false, message: 'Invalid vehicle index' });
+    }
+    arr.splice(idx, 1);
+    user.roleSpecificData.evUserInfo.vehicles = arr;
+    await user.save();
+    return res.json({ success: true, message: 'Vehicle removed', data: arr });
+  } catch (error) {
+    console.error('Error removing user vehicle:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
 
 export const signup = async (req, res) => {
 	try {
@@ -239,6 +366,7 @@ export const updateUserVehicle = async (req, res) => {
 
     user.roleSpecificData = user.roleSpecificData || {};
     user.roleSpecificData.evUserInfo = user.roleSpecificData.evUserInfo || {};
+    // Maintain single vehicleInfo for backward compatibility
     user.roleSpecificData.evUserInfo.vehicleInfo = {
       make: make || '',
       model: model || '',
@@ -250,12 +378,35 @@ export const updateUserVehicle = async (req, res) => {
       specifications: specifications || undefined
     };
 
+    // Also ensure vehicles array exists and prevent duplicates
+    user.roleSpecificData.evUserInfo.vehicles = user.roleSpecificData.evUserInfo.vehicles || [];
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const duplicate = user.roleSpecificData.evUserInfo.vehicles.some(v =>
+      norm(v.make) === norm(make) &&
+      norm(v.model) === norm(model) &&
+      (v.year || undefined) === (typeof year === 'number' ? year : undefined) &&
+      Number(v.batteryCapacity) === (typeof batteryCapacity === 'number' ? batteryCapacity : undefined)
+    );
+    if (duplicate) {
+      return res.status(409).json({ success: false, message: 'Vehicle with same details already exists' });
+    }
+    user.roleSpecificData.evUserInfo.vehicles.push({
+      make: make || '',
+      model: model || '',
+      year: typeof year === 'number' ? year : undefined,
+      batteryCapacity: typeof batteryCapacity === 'number' ? batteryCapacity : undefined,
+      preferredChargingType: preferredChargingType || undefined,
+    });
+
     await user.save();
 
     return res.json({ 
       success: true,
       message: 'Vehicle information updated successfully', 
-      data: user.roleSpecificData.evUserInfo.vehicleInfo 
+      data: {
+        vehicleInfo: user.roleSpecificData.evUserInfo.vehicleInfo,
+        vehicles: user.roleSpecificData.evUserInfo.vehicles
+      }
     });
   } catch (error) {
     console.error('Error updating EV user vehicle:', error);
@@ -320,16 +471,18 @@ export const updateProfileImage = async (req, res) => {
     const { profileImage } = req.body;
     const userId = req.user.sub;
 
-    // Validation
-    if (!profileImage) {
-      return res.status(400).json({ error: 'Profile image URL is required' });
-    }
-
-    // Basic URL validation
-    try {
-      new URL(profileImage);
-    } catch {
-      return res.status(400).json({ error: 'Invalid profile image URL' });
+    // If empty string provided, treat as removal
+    const isRemoval = typeof profileImage === 'string' && profileImage.trim() === '';
+    if (!isRemoval) {
+      // When setting a URL, it must be a valid absolute URL
+      if (!profileImage || typeof profileImage !== 'string') {
+        return res.status(400).json({ error: 'Profile image URL is required' });
+      }
+      try {
+        new URL(profileImage);
+      } catch {
+        return res.status(400).json({ error: 'Invalid profile image URL' });
+      }
     }
 
     const user = await User.findById(userId);
@@ -337,8 +490,8 @@ export const updateProfileImage = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Update profile image
-    user.personalInfo.profileImage = profileImage;
+    // Update or clear profile image
+    user.personalInfo.profileImage = isRemoval ? undefined : profileImage;
     await user.save();
 
     // Return sanitized user data
@@ -355,7 +508,7 @@ export const updateProfileImage = async (req, res) => {
     };
 
     res.json({ 
-      message: 'Profile image updated successfully',
+      message: isRemoval ? 'Profile image removed successfully' : 'Profile image updated successfully',
       user: sanitizedUser 
     });
   } catch (error) {

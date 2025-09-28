@@ -14,10 +14,12 @@ import CorporateApplicationPage from './pages/CorporateApplicationPage';
 import CorporateDashboard from './pages/CorporateDashboard';
 import FranchiseOwnerDashboard from './pages/FranchiseOwnerDashboard';
 import StationManagerDashboard from './pages/StationManagerDashboard';
+import StationManagerStationDetails from './pages/StationManagerStationDetails';
 import FirstLoginReset from './pages/FirstLoginReset';
 import StationManagerPasswordReset from './pages/StationManagerPasswordReset';
 import StationDetails from './pages/StationDetails';
 import StationsPage from './pages/StationsPage';
+import BookingsPage from './pages/BookingsPage';
 import ForgotPassword from './pages/ForgotPassword';
 
 function App() {
@@ -35,10 +37,12 @@ function App() {
             <Route path="/home" element={<UserHomePage />} />
           <Route path="/stations" element={<StationsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/bookings" element={<BookingsPage />} />
             <Route path="/apply-corporate" element={<CorporateApplicationPage />} />
             <Route path="/corporate/dashboard" element={<CorporateDashboard />} />
             <Route path="/franchise/dashboard" element={<FranchiseOwnerDashboard />} />
             <Route path="/station-manager/dashboard" element={<StationManagerDashboard />} />
+            <Route path="/station-manager/stations/:id" element={<StationManagerStationDetails />} />
             <Route path="/first-login-reset" element={<FirstLoginReset />} />
             <Route path="/station-manager/password-reset" element={<StationManagerPasswordReset />} />
           <Route path="/stations/:id" element={<StationDetails />} />

@@ -86,13 +86,33 @@ class CorporateService {
       page: page.toString(),
       limit: limit.toString(),
       ...(status && { status }),
-      ...(search && { search })
+      ...(search && { search }),
+      _: Date.now().toString() // cache-buster to avoid 304 cached payload after mutations
     });
     return this.makeRequest(`/corporate/franchises?${params}`);
   }
 
   async getCorporateStations() {
     return this.makeRequest('/corporate/stations');
+  }
+
+  async updateCorporateStationStatus(stationId, status) {
+    return this.makeRequest(`/corporate/stations/${stationId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  }
+
+  // Corporate info
+  async getCorporateInfo() {
+    return this.makeRequest('/corporate/info');
+  }
+
+  async updateCorporateName(name) {
+    return this.makeRequest('/corporate/info/name', {
+      method: 'PATCH',
+      body: JSON.stringify({ name })
+    });
   }
 
   async addFranchiseOwner(franchiseData) {

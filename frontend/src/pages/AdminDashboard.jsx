@@ -67,6 +67,7 @@ import {
   Build as BuildIcon,
   Monitor as MonitorIcon,
   Assignment as AssignmentIcon,
+  Menu as MenuIcon,
   Folder as FolderIcon,
   Flag as FlagIcon,
   Refresh as RefreshIcon,
@@ -328,6 +329,10 @@ const AddCorporateAdminSection = ({ onRefresh }) => {
     if (!formData.businessRegistrationNumber || !isValidBRN(formData.businessRegistrationNumber)) return 'Business Registration Number must be a 21-character alphanumeric code';
     return '';
   };
+
+  
+
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -650,6 +655,11 @@ const AdminDashboard = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [addAdminDialogOpen, setAddAdminDialogOpen] = useState(false);
+  // Station Management state
+  const [stations, setStations] = useState([]);
+  const [stationsLoading, setStationsLoading] = useState(false);
+  const [stationError, setStationError] = useState('');
+  const [stationFilters, setStationFilters] = useState({ q: '', status: '', city: '', state: '' });
 
   const loadDashboard = async () => {
     try {
@@ -693,6 +703,45 @@ const AdminDashboard = () => {
       setVehicleLoading(false);
     }
   };
+
+  // Station Management: loader and actions
+  const loadStations = async () => {
+    if (activeSection !== 'stations') return;
+    try {
+      setStationsLoading(true);
+      setStationError('');
+      const data = await api.adminGetStations({
+        ...(stationFilters.q ? { q: stationFilters.q } : {}),
+        ...(stationFilters.status ? { status: stationFilters.status } : {}),
+        ...(stationFilters.city ? { city: stationFilters.city } : {}),
+        ...(stationFilters.state ? { state: stationFilters.state } : {}),
+      });
+      setStations(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Failed to load stations', e);
+      setStationError(e.message || 'Failed to load stations');
+      setStations([]);
+    } finally {
+      setStationsLoading(false);
+    }
+  };
+
+  const handleUpdateStationStatus = async (id, nextStatus) => {
+    try {
+      await api.adminUpdateStationStatus(id, nextStatus);
+      await loadStations();
+    } catch (e) {
+      alert(e.message || 'Failed to update status');
+    }
+  };
+
+  // Reload stations when filters change (debounced)
+  useEffect(() => {
+    if (activeSection !== 'stations') return;
+    const t = setTimeout(() => { loadStations(); }, 200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationFilters]);
 
   const handleVehicleInputChange = (field) => (event) => {
     const value = event.target.value;
@@ -966,6 +1015,14 @@ const AdminDashboard = () => {
     });
   }, [activeSection, corporateAdmins]);
 
+  // Load stations when switching to Station Management
+  useEffect(() => {
+    if (activeSection === 'stations') {
+      loadStations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection]);
+
   const navigationItems = [
     { id: 'dashboard', label: 'Main Dashboard', icon: <HomeIcon />, active: true },
     { id: 'users', label: 'User Management', icon: <PeopleIcon /> },
@@ -1008,22 +1065,30 @@ const AdminDashboard = () => {
       <Drawer
         variant="permanent"
         sx={{
-          width: 280,
+          width: drawerOpen ? 80 : 280,
           flexShrink: 0,
           '& .MuiDrawer-paper': {
-            width: 280,
+            width: drawerOpen ? 80 : 280,
             boxSizing: 'border-box',
             bgcolor: '#ffffff',
             borderRight: '1px solid #e2e8f0',
+            overflowX: 'hidden'
           },
         }}
       >
-        <Box sx={{ p: 3, borderBottom: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-          <img src={nexchargeLogo} alt="NexCharge" style={{ height: '52px', width: 'auto' }} />
-          <Typography variant="subtitle2" color="text.primary" sx={{ fontWeight: 'bold', mt: 1 }}>Platform Admin</Typography>
+        <Box sx={{ p: 2, borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: drawerOpen ? 'center' : 'space-between', gap: 1 }}>
+          {!drawerOpen && (
+            <img src={nexchargeLogo} alt="NexCharge" style={{ height: '40px', width: 'auto' }} />
+          )}
+          {!drawerOpen && (
+            <Typography variant="subtitle2" color="text.primary" sx={{ fontWeight: 'bold' }}>Platform Admin</Typography>
+          )}
+          <IconButton size="small" onClick={() => setDrawerOpen(!drawerOpen)} sx={{ ml: drawerOpen ? 0 : 'auto' }}>
+            <MenuIcon />
+          </IconButton>
         </Box>
         
-        <List sx={{ px: 2, py: 1 }}>
+        <List sx={{ px: drawerOpen ? 1 : 2, py: 1 }}>
           {navigationItems.map((item) => (
             <ListItem
               key={item.id}
@@ -1037,20 +1102,26 @@ const AdminDashboard = () => {
                 '&:hover': {
                   bgcolor: activeSection === item.id ? '#f1f5f9' : '#f8fafc',
                 },
+                justifyContent: drawerOpen ? 'center' : 'flex-start'
               }}
             >
               <ListItemIcon sx={{ 
                 color: activeSection === item.id ? '#1e293b' : '#64748b',
-                minWidth: 40 
+                minWidth: drawerOpen ? 0 : 40,
+                mr: drawerOpen ? 0 : 1,
+                display: 'flex',
+                justifyContent: 'center'
               }}>
                 {item.icon}
               </ListItemIcon>
-              <ListItemText 
-                primary={item.label} 
-                primaryTypographyProps={{ 
-                  fontWeight: activeSection === item.id ? 600 : 400 
-                }} 
-              />
+              {!drawerOpen && (
+                <ListItemText 
+                  primary={item.label} 
+                  primaryTypographyProps={{ 
+                    fontWeight: activeSection === item.id ? 600 : 400 
+                  }} 
+                />
+              )}
             </ListItem>
           ))}
         </List>
@@ -1375,6 +1446,151 @@ const AdminDashboard = () => {
             {/* User Management Section */}
             {activeSection === 'users' && (
               <UserManagementSection users={users} />
+            )}
+
+            {/* Station Management Section */}
+            {activeSection === 'stations' && (
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                      Station Management
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Manage charging stations and operational status
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                    <TextField
+                      size="small"
+                      placeholder="Search..."
+                      value={stationFilters.q}
+                      onChange={(e) => setStationFilters({ ...stationFilters, q: e.target.value })}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon sx={{ color: 'text.secondary' }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={{ width: 260 }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 160 }}>
+                      <InputLabel>Status</InputLabel>
+                      <Select
+                        label="Status"
+                        value={stationFilters.status}
+                        onChange={(e) => setStationFilters({ ...stationFilters, status: e.target.value })}
+                      >
+                        <MenuItem value="">All</MenuItem>
+                        <MenuItem value="active">Active</MenuItem>
+                        <MenuItem value="inactive">Inactive</MenuItem>
+                        <MenuItem value="maintenance">Maintenance</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <TextField
+                      size="small"
+                      label="City"
+                      value={stationFilters.city}
+                      onChange={(e) => setStationFilters({ ...stationFilters, city: e.target.value })}
+                    />
+                    <TextField
+                      size="small"
+                      label="State"
+                      value={stationFilters.state}
+                      onChange={(e) => setStationFilters({ ...stationFilters, state: e.target.value })}
+                    />
+                    <Button variant="outlined" onClick={() => loadStations()} startIcon={<RefreshIcon />}>Refresh</Button>
+                  </Box>
+                </Box>
+
+                <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                  <CardContent>
+                    {stationError && (
+                      <Alert severity="error" sx={{ mb: 2 }}>{stationError}</Alert>
+                    )}
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Corporate</TableCell>
+                            <TableCell>Franchise</TableCell>
+                            <TableCell>Station</TableCell>
+                            <TableCell>Location</TableCell>
+                            <TableCell>Types</TableCell>
+                            <TableCell align="right">Chargers</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell align="right">Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {stationsLoading ? (
+                            <TableRow>
+                              <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                                <CircularProgress />
+                              </TableCell>
+                            </TableRow>
+                          ) : stations.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                                <Typography variant="body2" color="text.secondary">No stations found</Typography>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            stations.map((s) => (
+                              <TableRow key={s.id} hover>
+                                <TableCell>{s.corporate?.name || '-'}</TableCell>
+                                <TableCell>{s.franchise?.name || '-'}</TableCell>
+                                <TableCell>
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{s.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{s.code}</Typography>
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">{s.location?.city || '-'}, {s.location?.state || '-'}</Typography>
+                                  <Typography variant="caption" color="text.secondary">{s.location?.pincode || ''}</Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                    {(s.capacity?.chargerTypes || []).map((t) => (
+                                      <Chip key={t} label={t} size="small" variant="outlined" />
+                                    ))}
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="right">{s.capacity?.totalChargers ?? 0}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={s.status}
+                                    size="small"
+                                    color={s.status === 'active' ? 'success' : s.status === 'maintenance' ? 'warning' : 'default'}
+                                  />
+                                </TableCell>
+                                <TableCell align="right">
+                                  <FormControl size="small" sx={{ minWidth: 160 }}>
+                                    <InputLabel id={`status-label-${s.id}`}>Set Status</InputLabel>
+                                    <Select
+                                      labelId={`status-label-${s.id}`}
+                                      label="Set Status"
+                                      value={s.status || ''}
+                                      onChange={(e) => handleUpdateStationStatus(s.id, e.target.value)}
+                                    >
+                                      <MenuItem value={''} disabled>Select status</MenuItem>
+                                      <MenuItem value="active">Active</MenuItem>
+                                      <MenuItem value="maintenance">Maintenance</MenuItem>
+                                      <MenuItem value="inactive">Inactive</MenuItem>
+                                    </Select>
+                                  </FormControl>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
+              </Box>
             )}
 
             {/* Vehicle Management Section */}

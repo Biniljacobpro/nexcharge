@@ -174,11 +174,132 @@ export const createBooking = async (req, res) => {
   }
 };
 
+// Update booking (time window and/or charger type)
+export const updateBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.sub || req.user.id;
+    const { startTime, endTime, chargerType } = req.body;
+
+    const booking = await Booking.findOne({ _id: bookingId, userId });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (['cancelled', 'completed', 'no_show'].includes(booking.status)) {
+      return res.status(400).json({ success: false, message: 'Cannot edit a cancelled or completed booking' });
+    }
+
+    const now = new Date();
+    const newStart = startTime ? new Date(startTime) : new Date(booking.startTime);
+    const newEnd = endTime ? new Date(endTime) : new Date(booking.endTime);
+    const desiredType = chargerType || booking.chargerType;
+
+    if (!(newStart instanceof Date) || isNaN(newStart) || !(newEnd instanceof Date) || isNaN(newEnd)) {
+      return res.status(400).json({ success: false, message: 'Invalid start or end time' });
+    }
+    if (newStart <= now) {
+      return res.status(400).json({ success: false, message: 'Start time must be in the future' });
+    }
+    if (newEnd <= newStart) {
+      return res.status(400).json({ success: false, message: 'End time must be after start time' });
+    }
+
+    const station = await Station.findById(booking.stationId);
+    if (!station) {
+      return res.status(404).json({ success: false, message: 'Station not found' });
+    }
+
+    // Find an available charger of desiredType that does not overlap
+    const candidateChargers = (station.capacity?.chargers || []).filter(c => c.type === desiredType);
+    let chosenCharger = null;
+    for (const c of candidateChargers) {
+      const overlap = await Booking.findOne({
+        stationId: booking.stationId,
+        chargerId: c.chargerId,
+        _id: { $ne: booking._id },
+        status: { $in: ['pending', 'confirmed', 'active'] },
+        $or: [{ startTime: { $lt: newEnd }, endTime: { $gt: newStart } }]
+      });
+      if (!overlap) { chosenCharger = c; break; }
+    }
+
+    if (!chosenCharger) {
+      return res.status(400).json({ success: false, message: `No available ${desiredType} chargers for the selected time window` });
+    }
+
+    // Free previously held charger (if any) and occupy the new one immediately (consistent with createBooking behavior)
+    const prevCharger = station.capacity?.chargers?.find(c => c.chargerId === booking.chargerId);
+    if (prevCharger && !prevCharger.isAvailable) {
+      prevCharger.isAvailable = true;
+      prevCharger.currentBooking = null;
+      if (typeof station.capacity.availableSlots === 'number') {
+        station.capacity.availableSlots = station.capacity.availableSlots + 1;
+      }
+    }
+
+    chosenCharger.isAvailable = false;
+    chosenCharger.currentBooking = booking._id;
+    if (typeof station.capacity.availableSlots === 'number') {
+      station.capacity.availableSlots = station.capacity.availableSlots - 1;
+    }
+    await station.save();
+
+    // Update booking
+    booking.chargerType = desiredType;
+    booking.chargerId = chosenCharger.chargerId;
+    booking.startTime = newStart;
+    booking.endTime = newEnd;
+    booking.duration = Math.round((newEnd - newStart) / (1000 * 60));
+    await booking.save();
+
+    await booking.populate([
+      { path: 'stationId', select: 'name location' },
+      { path: 'userId', select: 'personalInfo.firstName personalInfo.lastName personalInfo.email' }
+    ]);
+
+    res.json({ success: true, message: 'Booking updated successfully', data: booking });
+  } catch (error) {
+    console.error('Error updating booking:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 // Get user's bookings
 export const getUserBookings = async (req, res) => {
   try {
     const userId = req.user.sub || req.user.id;
     const { status, limit = 10, page = 1 } = req.query;
+
+    // Auto-complete expired bookings and free chargers
+    const now = new Date();
+    const expiring = await Booking.find({
+      userId,
+      status: { $in: ['pending', 'confirmed', 'active'] },
+      endTime: { $lt: now }
+    });
+    if (expiring.length > 0) {
+      await Promise.all(expiring.map(async (b) => {
+        try {
+          b.status = 'completed';
+          await b.save();
+          const station = await Station.findById(b.stationId);
+          if (station) {
+            const charger = station.capacity?.chargers?.find(c => c.chargerId === b.chargerId);
+            if (charger && !charger.isAvailable) {
+              charger.isAvailable = true;
+              charger.currentBooking = null;
+              if (typeof station.capacity.availableSlots === 'number') {
+                station.capacity.availableSlots = station.capacity.availableSlots + 1;
+              }
+              await station.save();
+            }
+          }
+        } catch (e) {
+          // swallow errors to not block response
+        }
+      }));
+    }
 
     const query = { userId };
     if (status) {
@@ -257,6 +378,17 @@ export const cancelBooking = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
+      });
+    }
+
+    // Only allow cancellation if at least 2 hours before start time
+    const now = new Date();
+    const start = new Date(booking.startTime);
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    if (start.getTime() - now.getTime() < twoHoursMs) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cancellations are only allowed up to 2 hours before the start time'
       });
     }
 

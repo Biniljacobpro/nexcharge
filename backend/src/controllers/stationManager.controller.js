@@ -1,6 +1,8 @@
 import Station from '../models/station.model.js';
 import Booking from '../models/booking.model.js';
 import User from '../models/user.model.js';
+import path from 'path';
+import fs from 'fs';
 
 // Get dashboard data for station manager
 export const getDashboardData = async (req, res) => {
@@ -214,6 +216,47 @@ export const getDashboardData = async (req, res) => {
   }
 };
 
+// Delete a station image (only if assigned)
+export const deleteStationImage = async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { id } = req.params;
+    const { url } = req.body || {};
+
+    if (!url) return res.status(400).json({ success: false, message: 'Image url is required' });
+
+    const user = await User.findById(userId);
+    const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
+    if (!assigned.map(String).includes(String(id))) {
+      return res.status(403).json({ success: false, message: 'Access denied to this station' });
+    }
+
+    const station = await Station.findById(id);
+    if (!station) return res.status(404).json({ success: false, message: 'Station not found' });
+
+    const before = station.images?.length || 0;
+    station.images = (station.images || []).filter((u) => u !== url);
+    const after = station.images.length;
+    await station.save();
+
+    // Try to remove file from disk if it is inside uploads
+    try {
+      if (url.startsWith('/uploads/')) {
+        const filePath = path.resolve(process.cwd(), url.slice(1));
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    } catch (e) {
+      // ignore file deletion errors
+      console.warn('Failed to delete file:', e.message);
+    }
+
+    return res.json({ success: true, message: 'Image deleted', removed: before - after, images: station.images });
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete image', error: error.message });
+  }
+};
+
 // Get bookings for assigned stations
 export const getBookings = async (req, res) => {
   try {
@@ -409,4 +452,109 @@ export const respondToFeedback = async (req, res) => {
     success: true,
     message: 'Feedback response submitted successfully'
   });
+};
+
+// Get single station details (only if assigned to manager)
+export const getStationDetails = async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { id } = req.params;
+
+    const user = await User.findById(userId);
+    const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
+    if (!assigned.map(String).includes(String(id))) {
+      return res.status(403).json({ success: false, message: 'Access denied to this station' });
+    }
+
+    const station = await Station.findById(id);
+    if (!station) {
+      return res.status(404).json({ success: false, message: 'Station not found' });
+    }
+
+    return res.json({ success: true, data: station });
+  } catch (error) {
+    console.error('Error fetching station details:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch station details', error: error.message });
+  }
+};
+
+// Update station details (only allowed fields, and only if assigned)
+export const updateStationDetails = async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { id } = req.params;
+    const updates = req.body || {};
+
+    const user = await User.findById(userId);
+    const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
+    if (!assigned.map(String).includes(String(id))) {
+      return res.status(403).json({ success: false, message: 'Access denied to this station' });
+    }
+
+    // Whitelist updatable paths
+    const allowedPaths = [
+      'name',
+      'description',
+      'location.address', 'location.city', 'location.state', 'location.pincode', 'location.nearbyLandmarks',
+      'capacity.totalChargers', 'capacity.chargerTypes', 'capacity.maxPowerPerCharger',
+      'pricing.model', 'pricing.basePrice', 'pricing.cancellationPolicy',
+      'operational.status', 'operational.parkingSlots', 'operational.parkingFee', 'operational.operatingHours.is24Hours', 'operational.operatingHours.customHours.start', 'operational.operatingHours.customHours.end',
+      'amenities'
+    ];
+
+    const applyUpdates = (doc, pathStr, value) => {
+      const keys = pathStr.split('.');
+      let cur = doc;
+      for (let i = 0; i < keys.length - 1; i++) {
+        const k = keys[i];
+        if (cur[k] == null) cur[k] = {};
+        cur = cur[k];
+      }
+      cur[keys[keys.length - 1]] = value;
+    };
+
+    const station = await Station.findById(id);
+    if (!station) return res.status(404).json({ success: false, message: 'Station not found' });
+
+    Object.entries(updates).forEach(([key, val]) => {
+      if (allowedPaths.includes(key)) {
+        applyUpdates(station, key, val);
+      }
+    });
+
+    station.updatedBy = userId;
+    await station.save();
+
+    return res.json({ success: true, message: 'Station updated successfully', data: station });
+  } catch (error) {
+    console.error('Error updating station:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update station', error: error.message });
+  }
+};
+
+// Upload station images (only if assigned)
+export const uploadStationImages = async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { id } = req.params;
+
+    const user = await User.findById(userId);
+    const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
+    if (!assigned.map(String).includes(String(id))) {
+      return res.status(403).json({ success: false, message: 'Access denied to this station' });
+    }
+
+    const station = await Station.findById(id);
+    if (!station) return res.status(404).json({ success: false, message: 'Station not found' });
+
+    const files = (req.files || []).map(f => `/${f.path.replace(/\\/g, '/')}`);
+    station.images = [...(station.images || []), ...files];
+    station.updatedBy = userId;
+    await station.save();
+
+    return res.json({ success: true, message: 'Images uploaded successfully', data: station.images });
+  } catch (error) {
+    console.error('Error uploading images:', error);
+    return res.status(500).json({ success: false, message: 'Failed to upload images', error: error.message });
+  }
 };

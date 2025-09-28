@@ -4,14 +4,20 @@ import Vehicle from '../models/vehicle.model.js';
 // GET /api/public/stations - Get all public stations
 export const getPublicStations = async (req, res) => {
   try {
-    const stations = await Station.find({ 'operational.status': 'active' })
-      .select('name location capacity pricing operational')
+    // Show stations that are active or under maintenance (hide inactive)
+    const stations = await Station.find({ 'operational.status': { $in: ['active', 'maintenance'] } })
+      .select('name location capacity pricing operational images')
       .lean();
 
     const stationsWithAvailability = stations.map(s => ({
       ...s,
-      availableSlots: s.capacity?.chargers?.filter(c => c.isAvailable).length || s.capacity?.availableSlots || 0,
-      availableChargers: s.capacity?.chargers?.filter(c => c.isAvailable) || []
+      // If maintenance, expose zero availability for clarity on UI
+      availableSlots: s.operational?.status === 'maintenance'
+        ? 0
+        : (s.capacity?.chargers?.filter(c => c.isAvailable).length || s.capacity?.availableSlots || 0),
+      availableChargers: s.operational?.status === 'maintenance'
+        ? []
+        : (s.capacity?.chargers?.filter(c => c.isAvailable) || [])
     }));
 
     res.json({ success: true, data: stationsWithAvailability });
@@ -26,17 +32,26 @@ export const getPublicStationById = async (req, res) => {
   try {
     const { id } = req.params;
     const station = await Station.findById(id)
-      .select('name location capacity pricing operational analytics')
+      .select('name location capacity pricing operational analytics images')
       .lean();
 
     if (!station) {
       return res.status(404).json({ success: false, message: 'Station not found' });
     }
 
+    // Hide inactive stations from public details as well
+    if (station.operational?.status === 'inactive') {
+      return res.status(404).json({ success: false, message: 'Station not found' });
+    }
+
     const stationWithAvailability = {
       ...station,
-      availableSlots: station.capacity?.chargers?.filter(c => c.isAvailable).length || station.capacity?.availableSlots || 0,
-      availableChargers: station.capacity?.chargers?.filter(c => c.isAvailable) || []
+      availableSlots: station.operational?.status === 'maintenance'
+        ? 0
+        : (station.capacity?.chargers?.filter(c => c.isAvailable).length || station.capacity?.availableSlots || 0),
+      availableChargers: station.operational?.status === 'maintenance'
+        ? []
+        : (station.capacity?.chargers?.filter(c => c.isAvailable) || [])
     };
 
     res.json({ success: true, data: stationWithAvailability });
