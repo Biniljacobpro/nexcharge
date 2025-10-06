@@ -15,6 +15,9 @@ import stationManagerRoutes from './routes/stationManager.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import bookingRoutes from './routes/booking.routes.js';
 import vehicleRoutes from './routes/vehicle.routes.js';
+import paymentRoutes from './routes/payment.routes.js';
+import availabilityRoutes from './routes/availability.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
 // Removed deprecated corporate application routes
 
 // Ensure env is loaded from backend/.env or projectRoot/.env
@@ -62,6 +65,9 @@ app.use('/api/station-manager', stationManagerRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/availability', availabilityRoutes);
+app.use('/api/notifications', notificationRoutes);
 // app.use('/api/corporates', corporateApplicationRoutes); // deprecated
 
 // Error handler

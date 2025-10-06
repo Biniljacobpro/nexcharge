@@ -135,7 +135,7 @@ const InteractiveMap = ({ compact = false, height }) => {
               type: (Array.isArray(s.capacity?.chargerTypes) && s.capacity.chargerTypes.length > 0) ? s.capacity.chargerTypes[0] : 'Various',
               available: s.availableSlots ?? s.capacity?.availableSlots ?? 0,
               total: s.capacity?.totalChargers ?? 0,
-              price: s.pricing?.basePrice ?? 0,
+              pricePerMinute: (s.pricing?.pricePerMinute ?? s.pricing?.basePrice ?? 0),
               status: s.operational?.status || 'active',
               rating: 4.5,
               amenities: s.amenities || []
@@ -169,7 +169,7 @@ const InteractiveMap = ({ compact = false, height }) => {
                       <strong>Available:</strong> ${station.available}/${station.total} slots
                     </p>
                     <p style="margin: 4px 0; color: #6b7280;">
-                      <strong>Price:</strong> ₹${station.price}/kWh
+                      <strong>Price:</strong> ₹${station.pricePerMinute}/minute
                     </p>
                     <button
                       onclick="window.dispatchEvent(new CustomEvent('navigateToStation', { detail: '${station.id}' }))"
@@ -417,7 +417,7 @@ const InteractiveMap = ({ compact = false, height }) => {
                       {station.status === 'maintenance' ? null : (
                         <Chip label={`⚡ ${station.available}/${station.total} available`} size="small" color={station.available > 0 ? 'success' : 'error'} variant={station.available > 0 ? 'outlined' : 'filled'} sx={{ fontWeight: 700 }} />
                       )}
-                      <Chip label={`$${station.price}/kWh`} size="small" sx={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 600 }} />
+                      <Chip label={`₹${station.pricePerMinute}/minute`} size="small" sx={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 600 }} />
                     </Box>
                     <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 2 }}>
                       ⭐ {station.rating}/5 • {(station.amenities && station.amenities.length > 0) ? station.amenities.join(', ') : 'No amenities listed'}

@@ -649,6 +649,135 @@ export const getFranchiseOwners = async (req, res) => {
   }
 };
 
+// Get corporate users (franchise owners and station managers)
+export const getCorporateUsers = async (req, res) => {
+  try {
+    const corporateId = await resolveCorporateIdFromRequest(req);
+    if (!corporateId) return res.status(403).json({ success: false, message: 'Corporate context not found' });
+
+    // Get franchises under this corporate
+    const corpFranchises = await Franchise.find({ corporateId }).select('_id').lean();
+    const corpFranchiseIds = corpFranchises.map(f => f._id);
+
+    // Get franchise owners
+    const franchiseOwners = await User.find({ 
+      role: 'franchise_owner', 
+      'roleSpecificData.franchiseOwnerInfo.franchiseId': { $in: corpFranchiseIds }
+    }).select('personalInfo.firstName personalInfo.lastName personalInfo.email personalInfo.phone credentials.isActive createdAt role');
+
+    // Get station managers from stations under this corporate
+    const stationManagers = await User.find({
+      role: 'station_manager',
+      'roleSpecificData.stationManagerInfo.assignedStations': { $exists: true }
+    }).populate({
+      path: 'roleSpecificData.stationManagerInfo.assignedStations',
+      match: {
+        $or: [
+          { corporateId },
+          ...(corpFranchiseIds.length ? [{ franchiseId: { $in: corpFranchiseIds } }] : [])
+        ]
+      },
+      select: 'name'
+    }).select('personalInfo.firstName personalInfo.lastName personalInfo.email personalInfo.phone credentials.isActive createdAt role roleSpecificData');
+
+    // Filter station managers who actually have stations under this corporate
+    const filteredStationManagers = stationManagers.filter(manager => 
+      manager.roleSpecificData?.stationManagerInfo?.assignedStations?.length > 0
+    );
+
+    const allUsers = [
+      ...franchiseOwners.map(user => ({
+        _id: user._id,
+        personalInfo: user.personalInfo,
+        role: user.role,
+        credentials: user.credentials,
+        createdAt: user.createdAt
+      })),
+      ...filteredStationManagers.map(user => ({
+        _id: user._id,
+        personalInfo: user.personalInfo,
+        role: user.role,
+        credentials: user.credentials,
+        createdAt: user.createdAt
+      }))
+    ];
+
+    return res.json({ success: true, users: allUsers });
+  } catch (error) {
+    console.error('Error fetching corporate users:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching users' });
+  }
+};
+
+// Update user status (activate/deactivate)
+export const updateCorporateUserStatus = async (req, res) => {
+  try {
+    const corporateId = await resolveCorporateIdFromRequest(req);
+    if (!corporateId) return res.status(403).json({ success: false, message: 'Corporate context not found' });
+
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'isActive boolean is required' });
+    }
+
+    // Find user and verify they belong to this corporate
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Check if user belongs to this corporate
+    let belongsToCorporate = false;
+
+    if (user.role === 'franchise_owner') {
+      const franchiseId = user.roleSpecificData?.franchiseOwnerInfo?.franchiseId;
+      if (franchiseId) {
+        const franchise = await Franchise.findOne({ _id: franchiseId, corporateId });
+        belongsToCorporate = !!franchise;
+      }
+    } else if (user.role === 'station_manager') {
+      // Check if any assigned stations belong to this corporate
+      const assignedStations = user.roleSpecificData?.stationManagerInfo?.assignedStations || [];
+      if (assignedStations.length > 0) {
+        const corpFranchises = await Franchise.find({ corporateId }).select('_id').lean();
+        const corpFranchiseIds = corpFranchises.map(f => f._id);
+        
+        const stationCount = await Station.countDocuments({
+          _id: { $in: assignedStations },
+          $or: [
+            { corporateId },
+            ...(corpFranchiseIds.length ? [{ franchiseId: { $in: corpFranchiseIds } }] : [])
+          ]
+        });
+        belongsToCorporate = stationCount > 0;
+      }
+    }
+
+    if (!belongsToCorporate) {
+      return res.status(403).json({ success: false, message: 'User does not belong to your corporate' });
+    }
+
+    user.credentials = user.credentials || {};
+    user.credentials.isActive = isActive;
+    await user.save();
+
+    return res.json({ 
+      success: true, 
+      message: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
+      user: {
+        _id: user._id,
+        role: user.role,
+        personalInfo: user.personalInfo,
+        credentials: { isActive: user.credentials?.isActive },
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    return res.status(500).json({ success: false, message: 'Error updating user status' });
+  }
+};
+
 // Get corporate analytics
 export const getAnalytics = async (req, res) => {
   try {

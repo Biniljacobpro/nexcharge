@@ -135,6 +135,18 @@ class CorporateService {
     });
   }
 
+  // User management
+  async getCorporateUsers() {
+    return this.makeRequest('/corporate/users');
+  }
+
+  async updateCorporateUserStatus(userId, isActive) {
+    return this.makeRequest(`/corporate/users/${userId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ isActive })
+    });
+  }
+
 
   // Future-ready methods for extensibility
   async getStationAnalytics(stationId) {

@@ -59,11 +59,28 @@ const BookingSchema = new mongoose.Schema({
   
   // Pricing and payment
   pricing: {
-    basePrice: { type: Number, required: true }, // per kWh
+    basePrice: { type: Number, required: true }, // per minute
     estimatedEnergy: { type: Number, default: 0 }, // kWh
     estimatedCost: { type: Number, default: 0 }, // total cost
     actualEnergy: { type: Number, default: 0 }, // actual kWh used
     actualCost: { type: Number, default: 0 } // actual cost
+  },
+
+  // Payment information
+  payment: {
+    razorpayOrderId: { type: String }, // Razorpay order ID
+    razorpayPaymentId: { type: String }, // Razorpay payment ID
+    razorpaySignature: { type: String }, // Razorpay signature for verification
+    paymentStatus: { 
+      type: String, 
+      enum: ['pending', 'completed', 'failed', 'refunded'],
+      default: 'pending'
+    },
+    paymentMethod: { type: String }, // card, netbanking, upi, etc.
+    paidAmount: { type: Number, default: 0 }, // actual amount paid
+    paymentDate: { type: Date },
+    refundId: { type: String }, // if refunded
+    refundAmount: { type: Number, default: 0 }
   },
   
   // Booking status

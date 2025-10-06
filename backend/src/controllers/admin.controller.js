@@ -1,4 +1,5 @@
 import User from '../models/user.model.js';
+import Booking from '../models/booking.model.js';
 import bcryptjs from 'bcryptjs';
 import { sendCorporateAdminWelcomeEmail } from '../utils/emailService.js';
 import Corporate from '../models/corporate.model.js';
@@ -15,6 +16,102 @@ export const overview = async (_req, res) => {
 	} catch (e) {
 		return res.status(500).json({ error: 'Failed to load overview' });
 	}
+};
+
+// Admin: Live stats for dashboard
+export const liveStats = async (_req, res) => {
+  try {
+    const now = new Date();
+
+    // Active stations
+    const activeStations = await Station.countDocuments({ 'operational.status': 'active' });
+
+    // Total revenue and total payments (completed payments only)
+    const revenueAgg = await Booking.aggregate([
+      { $match: { 'payment.paymentStatus': 'completed' } },
+      { $group: { _id: null, totalRevenue: { $sum: { $ifNull: ['$payment.paidAmount', 0] } }, totalPayments: { $sum: 1 } } }
+    ]);
+    const totalRevenue = revenueAgg?.[0]?.totalRevenue || 0;
+    const totalPayments = revenueAgg?.[0]?.totalPayments || 0;
+
+    // Live charging sessions: bookings currently in progress
+    const liveChargingSessions = await Booking.countDocuments({
+      status: { $in: ['confirmed', 'active'] },
+      startTime: { $lte: now },
+      endTime: { $gte: now }
+    });
+
+    // Monthly revenue (current month)
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthlyRevenueAgg = await Booking.aggregate([
+      { 
+        $match: { 
+          'payment.paymentStatus': 'completed',
+          'payment.paymentDate': { $gte: startOfMonth, $lte: now }
+        } 
+      },
+      { $group: { _id: null, monthlyRevenue: { $sum: { $ifNull: ['$payment.paidAmount', 0] } } } }
+    ]);
+    const monthlyRevenue = monthlyRevenueAgg?.[0]?.monthlyRevenue || 0;
+
+    // Weekly revenue (current week - Monday to Sunday)
+    const startOfWeek = new Date(now);
+    const dayOfWeek = now.getDay();
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0, Monday = 1
+    startOfWeek.setDate(now.getDate() - daysToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const weeklyRevenueAgg = await Booking.aggregate([
+      { 
+        $match: { 
+          'payment.paymentStatus': 'completed',
+          'payment.paymentDate': { $gte: startOfWeek, $lte: now }
+        } 
+      },
+      { $group: { _id: null, weeklyRevenue: { $sum: { $ifNull: ['$payment.paidAmount', 0] } } } }
+    ]);
+    const weeklyRevenue = weeklyRevenueAgg?.[0]?.weeklyRevenue || 0;
+
+    // Daily revenue for the last 7 days (for chart)
+    const dailyRevenueAgg = await Booking.aggregate([
+      { 
+        $match: { 
+          'payment.paymentStatus': 'completed',
+          'payment.paymentDate': { 
+            $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+            $lte: now 
+          }
+        } 
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$payment.paymentDate' },
+            month: { $month: '$payment.paymentDate' },
+            day: { $dayOfMonth: '$payment.paymentDate' }
+          },
+          dailyRevenue: { $sum: { $ifNull: ['$payment.paidAmount', 0] } }
+        }
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        activeStations,
+        totalRevenue,
+        totalPayments,
+        liveChargingSessions,
+        monthlyRevenue,
+        weeklyRevenue,
+        dailyRevenueChart: dailyRevenueAgg,
+        lastUpdated: now
+      }
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Failed to load live stats', error: e.message });
+  }
 };
 
 // Admin: List stations with corporate/franchise filters
@@ -114,12 +211,51 @@ export const updateStationManager = async (req, res) => {
   }
 };
 export const listUsers = async (_req, res) => {
-	try {
-		const users = await User.find({}, { 'personalInfo.firstName': 1, 'personalInfo.lastName': 1, 'personalInfo.email': 1, role: 1, createdAt: 1 }).limit(200).sort({ createdAt: -1 });
-		return res.json({ users });
-	} catch (e) {
-		return res.status(500).json({ error: 'Failed to load users' });
-	}
+  try {
+    const users = await User.find(
+      {},
+      {
+        'personalInfo.firstName': 1,
+        'personalInfo.lastName': 1,
+        'personalInfo.email': 1,
+        role: 1,
+        createdAt: 1,
+        'credentials.isActive': 1
+      }
+    )
+      .limit(200)
+      .sort({ createdAt: -1 });
+    return res.json({ users });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to load users' });
+  }
+};
+
+// Admin: Activate/Deactivate any user
+export const updateUserStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive boolean is required' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.credentials = user.credentials || {};
+    user.credentials.isActive = isActive;
+    await user.save();
+
+    return res.json({ success: true, user: {
+      _id: user._id,
+      role: user.role,
+      personalInfo: user.personalInfo,
+      credentials: { isActive: user.credentials?.isActive },
+      createdAt: user.createdAt
+    }});
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to update user status' });
+  }
 };
 
 // List corporate admins with active status

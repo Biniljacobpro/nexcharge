@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Box,
   Container,
@@ -22,7 +22,6 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Divider,
   Avatar,
   Badge,
   TextField,
@@ -43,12 +42,11 @@ import {
   Autocomplete
 } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
   People as PeopleIcon,
   Settings as SettingsIcon,
   Notifications as NotificationsIcon,
   Search as SearchIcon,
-  Help as HelpIcon,
+  PhotoCamera as PhotoCameraIcon,
   Home as HomeIcon,
   ShoppingCart as ShoppingCartIcon,
   BarChart as BarChartIcon,
@@ -57,8 +55,6 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
   Storage as StorageIcon,
   Business as BusinessIcon,
   Psychology as PsychologyIcon,
@@ -68,15 +64,12 @@ import {
   Monitor as MonitorIcon,
   Assignment as AssignmentIcon,
   Menu as MenuIcon,
-  Folder as FolderIcon,
-  Flag as FlagIcon,
   Refresh as RefreshIcon,
   MoreVert as MoreVertIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import nexchargeLogo from '../assets/nexcharge-high-resolution-logo-transparent.png';
-import { motion } from 'framer-motion';
 import * as api from '../utils/api';
 
 const StatCard = ({ title, value, change, icon, color = 'primary', status }) => (
@@ -173,13 +166,12 @@ const ChartCard = ({ title, value, subtitle, change, status, children, actionIco
 
 // Corporate Admin Management Section Component
 const CorporateAdminManagementSection = ({ admins, onRefresh, onAddAdmin }) => {
-  const [selectedApplication, setSelectedApplication] = useState(null);
-  const [reviewDialog, setReviewDialog] = useState(false);
-  const [reviewData, setReviewData] = useState({ status: 'approved', notes: '' });
-  const [loading, setLoading] = useState(false);
-
   // Ensure admins is always an array
   const safeAdmins = Array.isArray(admins) ? admins : [];
+
+  // Local search and status filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState(''); // '', 'active', 'inactive'
 
   const getActiveChip = (isActive) => (
     <Chip 
@@ -191,29 +183,71 @@ const CorporateAdminManagementSection = ({ admins, onRefresh, onAddAdmin }) => {
       }}
     />
   );
-  
+
+  const matchesSearch = (adm) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const name = `${adm.personalInfo?.firstName || ''} ${adm.personalInfo?.lastName || ''}`.toLowerCase();
+    const email = (adm.personalInfo?.email || '').toLowerCase();
+    const company = (adm.roleSpecificData?.corporateAdminInfo?.corporateId?.name || '').toLowerCase();
+    const brn = (adm.roleSpecificData?.corporateAdminInfo?.corporateId?.businessRegistrationNumber || '').toLowerCase();
+    return name.includes(q) || email.includes(q) || company.includes(q) || brn.includes(q);
+  };
+
+  const matchesStatus = (adm) => {
+    if (!statusFilter) return true;
+    const active = !!adm.credentials?.isActive;
+    return statusFilter === 'active' ? active : !active;
+  };
+
+  const filteredAdmins = safeAdmins.filter(a => matchesSearch(a) && matchesStatus(a));
+
   return (
     <>
 
       {/* Corporate Admins Table */}
       <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Corporate Admins ({safeAdmins.length})
+              Corporate Admins ({filteredAdmins.length})
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Button
-                variant="contained"
-                startIcon={<PersonIcon />}
-                onClick={onAddAdmin}
-              >
-                Add Corporate Admin
-              </Button>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+              <TextField
+                size="small"
+                placeholder="Search name, email, company, BRN..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <SearchIcon sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ width: 280 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>Status</InputLabel>
+                <Select label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="active">Active</MenuItem>
+                  <MenuItem value="inactive">Inactive</MenuItem>
+                </Select>
+              </FormControl>
+              {onAddAdmin && (
+                <Button
+                  variant="contained"
+                  startIcon={<PersonIcon />}
+                  onClick={onAddAdmin}
+                >
+                  Add Corporate Admin
+                </Button>
+              )}
             </Box>
           </Box>
           
-          {safeAdmins.length === 0 ? (
+          {filteredAdmins.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <BusinessIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary">
@@ -239,7 +273,7 @@ const CorporateAdminManagementSection = ({ admins, onRefresh, onAddAdmin }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {safeAdmins.map((adm) => (
+                  {filteredAdmins.map((adm) => (
                     <TableRow key={adm._id}>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -526,14 +560,74 @@ const AddCorporateAdminSection = ({ onRefresh }) => {
 };
 
 // User Management Section Component
-const UserManagementSection = ({ users }) => {
+const UserManagementSection = ({ users, onAddCorporateAdmin, onRefresh }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [updatingUserId, setUpdatingUserId] = useState(null);
+
+  // Filter users based on search query and role filter
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = !searchQuery || 
+      `${user.personalInfo?.firstName || ''} ${user.personalInfo?.lastName || ''}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.personalInfo?.email || '').toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesRole = !roleFilter || user.role === roleFilter;
+    
+    return matchesSearch && matchesRole;
+  });
+
+  // Get unique roles for filter dropdown
+  const uniqueRoles = [...new Set(users.map(u => u.role))].sort();
+
   return (
     <>
       <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
         <CardContent>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-            All Users ({users.length})
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              All Users ({filteredUsers.length})
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+              <TextField
+                size="small"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <SearchIcon sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ width: 250 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>Role</InputLabel>
+                <Select
+                  label="Role"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                >
+                  <MenuItem value="">All Roles</MenuItem>
+                  {uniqueRoles.map(role => (
+                    <MenuItem key={role} value={role}>
+                      {role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {onAddCorporateAdmin && (
+                <Button
+                  variant="contained"
+                  startIcon={<PersonIcon />}
+                  onClick={onAddCorporateAdmin}
+                >
+                  Add Corporate Admin
+                </Button>
+              )}
+            </Box>
+          </Box>
           
           <TableContainer>
             <Table>
@@ -543,50 +637,96 @@ const UserManagementSection = ({ users }) => {
                   <TableCell>ROLE</TableCell>
                   <TableCell>STATUS</TableCell>
                   <TableCell>JOINED</TableCell>
+                  <TableCell align="right">ACTIONS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {users.map((u) => (
-                  <TableRow key={u._id}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                          {u.personalInfo?.firstName?.[0]}{u.personalInfo?.lastName?.[0]}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {u.personalInfo?.firstName} {u.personalInfo?.lastName}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {u.personalInfo?.email}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={u.role} 
-                        size="small" 
-                        sx={{ 
-                          bgcolor: u.role === 'admin' ? 'error.main' : 'primary.main',
-                          color: 'white'
-                        }} 
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label="Active" 
-                        size="small" 
-                        sx={{ bgcolor: 'success.main', color: 'white' }} 
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(u.createdAt).toLocaleDateString()}
+                {filteredUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} sx={{ textAlign: 'center', py: 4 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {searchQuery || roleFilter ? 'No users found matching your search criteria' : 'No users found'}
                       </Typography>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredUsers.map((u) => (
+                    <TableRow key={u._id}>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar 
+                            src={u.profileImage || undefined}
+                            sx={{ 
+                              width: 32, 
+                              height: 32, 
+                              bgcolor: u.profileImage ? 'transparent' : 'primary.main' 
+                            }}
+                          >
+                            {!u.profileImage && `${u.personalInfo?.firstName?.[0] || ''}${u.personalInfo?.lastName?.[0] || ''}`}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {u.personalInfo?.firstName} {u.personalInfo?.lastName}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {u.personalInfo?.email}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={u.role} 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: u.role === 'admin' ? 'error.main' : 'primary.main',
+                            color: 'white'
+                          }} 
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={u.credentials?.isActive ? 'Active' : 'Inactive'} 
+                          size="small" 
+                          sx={{ bgcolor: u.credentials?.isActive ? 'success.main' : 'warning.main', color: 'white' }} 
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(u.createdAt).toLocaleDateString()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant={u.credentials?.isActive ? 'outlined' : 'contained'}
+                          color={u.credentials?.isActive ? 'warning' : 'success'}
+                          disabled={updatingUserId === u._id}
+                          onClick={async () => {
+                            try {
+                              setUpdatingUserId(u._id);
+                              await api.adminUpdateUserStatus(u._id, !u.credentials?.isActive);
+                              // Refresh the parent component's data
+                              if (onRefresh) {
+                                await onRefresh();
+                              }
+                            } catch (e) {
+                              console.error('Failed to update user status', e);
+                              alert(e.message || 'Failed to update status');
+                            } finally {
+                              setUpdatingUserId(null);
+                            }
+                          }}
+                        >
+                          {updatingUserId === u._id ? (
+                            <CircularProgress size={16} sx={{ mr: 1 }} />
+                          ) : null}
+                          {u.credentials?.isActive ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -601,7 +741,20 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [overview, setOverview] = useState(null);
+  const [stats, setStats] = useState({ 
+    activeStations: 0, 
+    totalRevenue: 0, 
+    totalPayments: 0, 
+    liveChargingSessions: 0, 
+    monthlyRevenue: 0,
+    weeklyRevenue: 0,
+    dailyRevenueChart: [],
+    lastUpdated: null 
+  });
+  const [revTooltip, setRevTooltip] = useState(null); // { left, top, value, dateStr }
   const [users, setUsers] = useState([]);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef(null);
   const [corporateAdmins, setCorporateAdmins] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [vehicleLoading, setVehicleLoading] = useState(false);
@@ -670,8 +823,9 @@ const AdminDashboard = () => {
       }
       setUser(profile);
       
-      const [ov, userList, corpAdmins, vehicleList] = await Promise.all([
+      const [ov, live, userList, corpAdmins, vehicleList] = await Promise.all([
         api.adminOverview(),
+        api.adminLiveStats(),
         api.adminUsers(),
         api.getCorporateAdmins(),
         loadVehicles()
@@ -680,6 +834,7 @@ const AdminDashboard = () => {
       console.log('Corporate Admins:', corpAdmins);
       
       setOverview(ov);
+      setStats(live || {});
       setUsers((userList || []).filter((u) => u.role !== 'admin'));
       setCorporateAdmins(corpAdmins || []);
       setVehicles(vehicleList || []);
@@ -701,6 +856,71 @@ const AdminDashboard = () => {
       return [];
     } finally {
       setVehicleLoading(false);
+    }
+  };
+
+  const loadLiveStats = useCallback(async () => {
+    try {
+      const live = await api.adminLiveStats();
+      setStats(live || {});
+    } catch (e) {
+      // Non-fatal: keep showing last known values
+      console.error('Live stats load error:', e);
+    }
+  }, []);
+
+  // Profile image upload handlers (Admin Settings)
+  const handlePickProfileImage = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleProfileFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingAvatar(true);
+      // 1) Upload file to server to get a URL/path
+      const uploadRes = await api.uploadProfileImageApi(file);
+      console.log('Profile image upload response:', uploadRes);
+
+      // Build absolute URL helper from API base
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      const apiOrigin = (() => {
+        try { return new URL(apiBase).origin; } catch { return apiBase.replace(/\/api\/?$/, ''); }
+      })();
+      const toAbs = (p) => {
+        if (!p) return '';
+        if (/^https?:\/\//i.test(p)) return p;
+        const clean = String(p).replace(/^\//, '');
+        return `${apiOrigin}/${clean}`;
+      };
+
+      let imageUrl = uploadRes?.url
+        || uploadRes?.imageUrl
+        || uploadRes?.fileUrl
+        || toAbs(uploadRes?.path)
+        || toAbs(uploadRes?.filePath)
+        || (uploadRes?.filename ? `${apiOrigin}/uploads/${uploadRes.filename}` : '')
+        || uploadRes?.user?.profileImage; // Backend returns user object with profileImage
+
+      if (!imageUrl) throw new Error('Upload did not return image URL');
+      
+      // If we got the user object from upload, use it directly, otherwise fetch fresh user data
+      if (uploadRes?.user) {
+        setUser(uploadRes.user);
+      } else {
+        // 2) Save profile image URL on user profile
+        await api.updateProfileImageApi(imageUrl);
+        // 3) Refresh current user
+        const me = await api.getMe();
+        setUser(me);
+      }
+    } catch (err) {
+      console.error('Profile image update failed:', err);
+      alert(err.message || 'Failed to update profile image');
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -1006,7 +1226,15 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     loadDashboard();
-  }, [navigate]);
+  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Auto-refresh live stats every 15s
+    const t = setInterval(() => {
+      loadLiveStats();
+    }, 15000);
+    return () => clearInterval(t);
+  }, [loadLiveStats]);
 
   useEffect(() => {
     console.log('AdminDashboard state changed:', { 
@@ -1163,36 +1391,21 @@ const AdminDashboard = () => {
           </Box>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <TextField
-              placeholder="Search..."
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ width: 300 }}
-            />
-            
             <IconButton>
               <Badge badgeContent={3} color="error">
                 <NotificationsIcon />
               </Badge>
             </IconButton>
-            
-            <IconButton onClick={() => setActiveSection('settings')}>
-              <SettingsIcon />
-            </IconButton>
-            
-            <IconButton>
-              <HelpIcon />
-            </IconButton>
-            
             <IconButton onClick={(e) => setUserMenuAnchor(e.currentTarget)}>
-              <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
-                {user?.personalInfo?.firstName?.[0]}{user?.personalInfo?.lastName?.[0]}
+              <Avatar 
+                src={user?.profileImage || undefined}
+                sx={{ 
+                  bgcolor: user?.profileImage ? 'transparent' : 'primary.main', 
+                  width: 40, 
+                  height: 40 
+                }}
+              >
+                {!user?.profileImage && `${user?.personalInfo?.firstName?.[0] || ''}${user?.personalInfo?.lastName?.[0] || ''}`}
               </Avatar>
             </IconButton>
             <Menu
@@ -1204,7 +1417,7 @@ const AdminDashboard = () => {
                 <ListItemIcon>
                   <SettingsIcon fontSize="small" />
                 </ListItemIcon>
-                Settings
+              Settings
               </MenuItem>
               <MenuItem onClick={() => { localStorage.removeItem('accessToken'); localStorage.removeItem('refreshToken'); navigate('/login'); }}>
                 <ListItemIcon>
@@ -1225,49 +1438,59 @@ const AdminDashboard = () => {
                 {/* KPI Cards Row */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                   <Grid item xs={12} sm={6} md={4} lg={2}>
-                    <StatCard
-                      title="Total Users"
-                      value={overview?.totalUsers || 0}
-                      change={12}
-                      icon={<PeopleIcon />}
-                      color="primary"
-                    />
+                    <Box onClick={() => setActiveSection('analytics')} sx={{ cursor: 'pointer' }}>
+                      <StatCard
+                        title="Total Users"
+                        value={overview?.totalUsers || 0}
+                        change={12}
+                        icon={<PeopleIcon />}
+                        color="primary"
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={4} lg={2}>
-                    <StatCard
-                      title="Active Stations"
-                      value={overview?.activeStations || 0}
-                      change={8}
-                      icon={<StorageIcon />}
-                      color="secondary"
-                    />
+                    <Box onClick={() => setActiveSection('analytics')} sx={{ cursor: 'pointer' }}>
+                      <StatCard
+                        title="Active Stations"
+                        value={(stats?.activeStations ?? 0).toLocaleString()}
+                        change={8}
+                        icon={<StorageIcon />}
+                        color="primary"
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={4} lg={2}>
-                    <StatCard
-                      title="Total Revenue"
-                      value={`$${(overview?.totalRevenue || 0).toLocaleString()}`}
-                      change={23}
-                      icon={<TrendingUpIcon />}
-                      color="success"
-                    />
+                    <Box onClick={() => setActiveSection('analytics')} sx={{ cursor: 'pointer' }}>
+                      <StatCard
+                        title="Total Revenue"
+                        value={`₹${Number(stats?.totalRevenue || 0).toLocaleString()}`}
+                        change={23}
+                        icon={<BarChartIcon />}
+                        color="success"
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={4} lg={2}>
-                    <StatCard
-                      title="Charging Sessions"
-                      value={(overview?.totalSessions || 0).toLocaleString()}
-                      change={15}
-                      icon={<BarChartIcon />}
-                      color="info"
-                    />
+                    <Box onClick={() => setActiveSection('analytics')} sx={{ cursor: 'pointer' }}>
+                      <StatCard
+                        title="Charging Sessions (Live)"
+                        value={(stats?.liveChargingSessions ?? 0).toLocaleString()}
+                        change={15}
+                        icon={<MonitorIcon />}
+                        color="info"
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={4} lg={2}>
-                    <StatCard
-                      title="System Uptime"
-                      value="99.9%"
-                      status="Healthy"
-                      icon={<CheckCircleIcon />}
-                      color="success"
-                    />
+                    <Box onClick={() => setActiveSection('analytics')} sx={{ cursor: 'pointer' }}>
+                      <StatCard
+                        title="System Uptime"
+                        value="99.9%"
+                        status="Healthy"
+                        icon={<CheckCircleIcon />}
+                        color="success"
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={4} lg={2}>
                     <StatCard
@@ -1283,35 +1506,155 @@ const AdminDashboard = () => {
                 {/* Charts Row */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                   <Grid item xs={12} lg={8}>
-                    <ChartCard
-                      title="This month"
-                      value="$37.5K"
-                      subtitle="Total Revenue"
-                      change="+2.45%"
-                      status="On track"
-                      actionIcon={<MoreVertIcon />}
-                    >
-                      <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc', borderRadius: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Revenue Chart Placeholder
+                    <Box onClick={() => setActiveSection('analytics')} sx={{ cursor: 'pointer' }}>
+                      <ChartCard
+                        title="This month"
+                        value={`₹${Number(stats?.monthlyRevenue || 0).toLocaleString()}`}
+                        subtitle="Total Revenue"
+                        change="+2.45%"
+                        status="On track"
+                        actionIcon={<MoreVertIcon />}
+                      >
+                      <Box sx={{ height: 220, p: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          Daily Revenue (Last 7 Days)
                         </Typography>
+                        {stats?.dailyRevenueChart?.length > 1 ? (
+                          (() => {
+                            const data = stats.dailyRevenueChart;
+                            const maxVal = Math.max(...data.map(d => d.dailyRevenue), 1);
+                            const width = 600; // container will scale via viewBox
+                            const height = 140;
+                            const paddingX = 8;
+                            const paddingY = 8;
+                            const innerW = width - paddingX * 2;
+                            const innerH = height - paddingY * 2;
+                            const n = data.length;
+                            const points = data.map((d, i) => {
+                              const x = paddingX + (n === 1 ? innerW/2 : (i * innerW) / (n - 1));
+                              const y = paddingY + innerH - (d.dailyRevenue / maxVal) * innerH;
+                              return { x, y, v: d.dailyRevenue };
+                            });
+                            const areaPath = `M ${paddingX} ${height - paddingY} ` +
+                              points.map((p, idx) => `${idx === 0 ? 'L' : 'L'} ${p.x} ${p.y}`).join(' ') +
+                              ` L ${paddingX + innerW} ${height - paddingY} Z`;
+                            const linePath = 'M ' + points.map((p, idx) => `${idx === 0 ? '' : 'L '}${p.x} ${p.y}`).join(' ');
+                            return (
+                              <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+                                <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
+                                  <defs>
+                                    <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#1976d2" stopOpacity="0.35" />
+                                      <stop offset="100%" stopColor="#1976d2" stopOpacity="0.05" />
+                                    </linearGradient>
+                                  </defs>
+                                  <path d={areaPath} fill="url(#revGrad)" stroke="none" />
+                                  <path d={linePath} fill="none" stroke="#1976d2" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                                  {points.map((p, i) => (
+                                    <g key={i}>
+                                      <circle
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={4}
+                                        fill="#1976d2"
+                                        onMouseEnter={() => {
+                                          try {
+                                            const d = data[i]?._id;
+                                            const dateStr = d ? new Date(d.year, (d.month || 1) - 1, d.day || 1).toLocaleDateString() : '';
+                                            setRevTooltip({
+                                              left: `${(p.x / width) * 100}%`,
+                                              top: `${(p.y / height) * 100}%`,
+                                              value: p.v,
+                                              dateStr
+                                            });
+                                          } catch (_) {
+                                            setRevTooltip({ left: `${(p.x / width) * 100}%`, top: `${(p.y / height) * 100}%`, value: p.v, dateStr: '' });
+                                          }
+                                        }}
+                                        onMouseLeave={() => setRevTooltip(null)}
+                                      />
+                                    </g>
+                                  ))}
+                                </svg>
+                                {revTooltip && (
+                                  <Box
+                                    sx={{
+                                      position: 'absolute',
+                                      left: revTooltip.left,
+                                      top: revTooltip.top,
+                                      transform: 'translate(-50%, -120%)',
+                                      bgcolor: 'grey.900',
+                                      color: 'common.white',
+                                      px: 1,
+                                      py: 0.5,
+                                      borderRadius: 1,
+                                      boxShadow: 3,
+                                      fontSize: 12,
+                                      whiteSpace: 'nowrap',
+                                      pointerEvents: 'none'
+                                    }}
+                                  >
+                                    <Box sx={{ fontWeight: 600 }}>{revTooltip.dateStr || '—'}</Box>
+                                    <Box>₹{Number(revTooltip.value || 0).toLocaleString()}</Box>
+                                  </Box>
+                                )}
+                              </Box>
+                            );
+                          })()
+                        ) : (
+                          <Typography variant="body2" color="text.secondary" sx={{ width: '100%', textAlign: 'center', py: 6 }}>
+                            Not enough data to render chart
+                          </Typography>
+                        )}
                       </Box>
                     </ChartCard>
+                    </Box>
                   </Grid>
                   <Grid item xs={12} lg={4}>
-                    <ChartCard
+                    <Box onClick={() => setActiveSection('analytics')} sx={{ cursor: 'pointer' }}>
+                      <ChartCard
                       title="Weekly Revenue"
-                      value="$12.3K"
+                      value={`₹${Number(stats?.weeklyRevenue || 0).toLocaleString()}`}
                       subtitle="Current Week"
                       change="+5.2%"
                       actionIcon={<BarChartIcon />}
                     >
-                      <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc', borderRadius: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Weekly Chart Placeholder
+                      <Box sx={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+                        <Box sx={{ 
+                          width: 120, 
+                          height: 120, 
+                          borderRadius: '50%', 
+                          background: `conic-gradient(#1976d2 0deg ${(stats?.weeklyRevenue || 0) / Math.max(stats?.monthlyRevenue || 1, 1) * 360}deg, #e3f2fd ${(stats?.weeklyRevenue || 0) / Math.max(stats?.monthlyRevenue || 1, 1) * 360}deg 360deg)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative',
+                          mb: 2
+                        }}>
+                          <Box sx={{ 
+                            width: 80, 
+                            height: 80, 
+                            borderRadius: '50%', 
+                            bgcolor: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'column'
+                          }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                              {stats?.monthlyRevenue > 0 ? Math.round((stats?.weeklyRevenue || 0) / stats.monthlyRevenue * 100) : 0}%
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              of month
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" textAlign="center">
+                          Weekly vs Monthly Revenue
                         </Typography>
                       </Box>
                     </ChartCard>
+                    </Box>
                   </Grid>
                 </Grid>
 
@@ -1343,8 +1686,15 @@ const AdminDashboard = () => {
                                 <TableRow key={u._id}>
                                   <TableCell>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                                        {u.personalInfo?.firstName?.[0]}{u.personalInfo?.lastName?.[0]}
+                                      <Avatar 
+                                        src={u.profileImage || undefined}
+                                        sx={{ 
+                                          width: 32, 
+                                          height: 32, 
+                                          bgcolor: u.profileImage ? 'transparent' : 'primary.main' 
+                                        }}
+                                      >
+                                        {!u.profileImage && `${u.personalInfo?.firstName?.[0] || ''}${u.personalInfo?.lastName?.[0] || ''}`}
                                       </Avatar>
                                       <Box>
                                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -1443,9 +1793,393 @@ const AdminDashboard = () => {
               />
             )}
 
-            {/* User Management Section */}
+            {/* User Management Section (merged view with Add Corporate Admin) */}
             {activeSection === 'users' && (
-              <UserManagementSection users={users} />
+              <UserManagementSection 
+                users={users} 
+                onAddCorporateAdmin={() => setAddAdminDialogOpen(true)}
+                onRefresh={loadDashboard}
+              />
+            )}
+
+            {/* Analytics Section */}
+            {activeSection === 'analytics' && (
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                      Business Analytics
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Comprehensive insights into your platform performance
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Revenue Analytics */}
+                <Grid container spacing={3} sx={{ mb: 4 }}>
+                  <Grid item xs={12} lg={8}>
+                    <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                          <Box>
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                              Revenue Trends
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main', my: 1 }}>
+                              ₹{Number(stats?.totalRevenue || 0).toLocaleString()}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Total Revenue (All Time)
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
+                              <TrendingUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                              <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                                +12.5%
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                vs last month
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                        
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          Daily Revenue (Last 7 Days)
+                        </Typography>
+                        {stats?.dailyRevenueChart?.length > 1 ? (
+                          (() => {
+                            const data = stats.dailyRevenueChart;
+                            const maxVal = Math.max(...data.map(d => d.dailyRevenue), 1);
+                            const width = 600;
+                            const height = 200;
+                            const paddingX = 8;
+                            const paddingY = 8;
+                            const innerW = width - paddingX * 2;
+                            const innerH = height - paddingY * 2;
+                            const n = data.length;
+                            const points = data.map((d, i) => {
+                              const x = paddingX + (n === 1 ? innerW/2 : (i * innerW) / (n - 1));
+                              const y = paddingY + innerH - (d.dailyRevenue / maxVal) * innerH;
+                              return { x, y, v: d.dailyRevenue };
+                            });
+                            const areaPath = `M ${paddingX} ${height - paddingY} ` +
+                              points.map((p, idx) => `${idx === 0 ? 'L' : 'L'} ${p.x} ${p.y}`).join(' ') +
+                              ` L ${paddingX + innerW} ${height - paddingY} Z`;
+                            const linePath = 'M ' + points.map((p, idx) => `${idx === 0 ? '' : 'L '}${p.x} ${p.y}`).join(' ');
+                            return (
+                              <Box sx={{ width: '100%', height: 200, position: 'relative' }}>
+                                <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
+                                  <defs>
+                                    <linearGradient id="revGradAnalytics" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#1976d2" stopOpacity="0.35" />
+                                      <stop offset="100%" stopColor="#1976d2" stopOpacity="0.05" />
+                                    </linearGradient>
+                                  </defs>
+                                  <path d={areaPath} fill="url(#revGradAnalytics)" stroke="none" />
+                                  <path d={linePath} fill="none" stroke="#1976d2" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+                                  {points.map((p, i) => (
+                                    <circle key={i} cx={p.x} cy={p.y} r="5" fill="#1976d2" />
+                                  ))}
+                                </svg>
+                              </Box>
+                            );
+                          })()
+                        ) : (
+                          <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc', borderRadius: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              Not enough data to render chart
+                            </Typography>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} lg={4}>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
+                        <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                          <CardContent>
+                            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                              Monthly Revenue
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
+                              ₹{Number(stats?.monthlyRevenue || 0).toLocaleString()}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                              This Month
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <TrendingUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                              <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                                +8.2%
+                              </Typography>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                          <CardContent>
+                            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                              Weekly Revenue
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
+                              ₹{Number(stats?.weeklyRevenue || 0).toLocaleString()}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                              This Week
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <TrendingUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                              <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                                +5.2%
+                              </Typography>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    </Grid>
+                  </Grid>
+                </Grid>
+
+                {/* Key Metrics */}
+                <Grid container spacing={3} sx={{ mb: 4 }}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Active Stations
+                          </Typography>
+                          <StorageIcon sx={{ color: 'primary.main' }} />
+                        </Box>
+                        <Typography variant="h3" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
+                          {(stats?.activeStations ?? 0).toLocaleString()}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <TrendingUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                          <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                            +8 stations
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Total Users
+                          </Typography>
+                          <PeopleIcon sx={{ color: 'info.main' }} />
+                        </Box>
+                        <Typography variant="h3" sx={{ fontWeight: 700, color: 'info.main', mb: 1 }}>
+                          {users.length}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <TrendingUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                          <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                            +12 users
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Live Sessions
+                          </Typography>
+                          <MonitorIcon sx={{ color: 'warning.main' }} />
+                        </Box>
+                        <Typography variant="h3" sx={{ fontWeight: 700, color: 'warning.main', mb: 1 }}>
+                          {(stats?.liveChargingSessions ?? 0).toLocaleString()}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <TrendingUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                          <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                            +15 sessions
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Total Payments
+                          </Typography>
+                          <BarChartIcon sx={{ color: 'success.main' }} />
+                        </Box>
+                        <Typography variant="h3" sx={{ fontWeight: 700, color: 'success.main', mb: 1 }}>
+                          {(stats?.totalPayments ?? 0).toLocaleString()}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <TrendingUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                          <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                            +23 payments
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+
+                {/* User Analytics */}
+                <Grid container spacing={3}>
+                  <Grid item xs={12} lg={6}>
+                    <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                      <CardContent>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
+                          User Role Distribution
+                        </Typography>
+                        <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {(() => {
+                            const roleStats = users.reduce((acc, user) => {
+                              acc[user.role] = (acc[user.role] || 0) + 1;
+                              return acc;
+                            }, {});
+                            const roles = Object.keys(roleStats);
+                            const colors = ['#1976d2', '#2e7d32', '#ed6c02', '#d32f2f', '#7b1fa2'];
+                            
+                            return (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+                                {roles.map((role, index) => (
+                                  <Box key={role} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <Box sx={{ 
+                                      width: 16, 
+                                      height: 16, 
+                                      borderRadius: '50%', 
+                                      bgcolor: colors[index % colors.length] 
+                                    }} />
+                                    <Typography variant="body2" sx={{ minWidth: 120 }}>
+                                      {role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                    </Typography>
+                                    <Box sx={{ 
+                                      flexGrow: 1, 
+                                      height: 8, 
+                                      bgcolor: 'grey.200', 
+                                      borderRadius: 1,
+                                      overflow: 'hidden'
+                                    }}>
+                                      <Box sx={{ 
+                                        width: `${(roleStats[role] / users.length) * 100}%`, 
+                                        height: '100%', 
+                                        bgcolor: colors[index % colors.length] 
+                                      }} />
+                                    </Box>
+                                    <Typography variant="body2" sx={{ minWidth: 40, textAlign: 'right' }}>
+                                      {roleStats[role]}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            );
+                          })()}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} lg={6}>
+                    <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                      <CardContent>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
+                          Recent Activity
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                            <CheckCircleIcon sx={{ color: 'success.main' }} />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                New user registration
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                2 minutes ago
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                            <BarChartIcon sx={{ color: 'primary.main' }} />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                Payment completed
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                5 minutes ago
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                            <StorageIcon sx={{ color: 'info.main' }} />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                New station activated
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                1 hour ago
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              </Box>
+            )}
+
+            {/* Settings Section */}
+            {activeSection === 'settings' && (
+              <Card sx={{ maxWidth: 520, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <Box sx={{ position: 'relative' }}>
+                      <Avatar
+                        src={user?.profileImage || undefined}
+                        sx={{ width: 80, height: 80 }}
+                      />
+                      <IconButton
+                        onClick={handlePickProfileImage}
+                        size="medium"
+                        sx={{ position: 'absolute', right: -6, bottom: -6, bgcolor: 'background.paper', boxShadow: 2 }}
+                        disabled={uploadingAvatar}
+                      >
+                        <PhotoCameraIcon />
+                      </IconButton>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleProfileFileSelected}
+                        style={{ display: 'none' }}
+                      />
+                    </Box>
+                  </Box>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    {(user?.personalInfo?.firstName || user?.firstName || '') + ' ' + (user?.personalInfo?.lastName || user?.lastName || '')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {user?.personalInfo?.email || user?.email || ''}
+                  </Typography>
+                  <Chip
+                    label={user?.role || user?.personalInfo?.role || 'ev_user'}
+                    variant="outlined"
+                    color="primary"
+                  />
+
+                </CardContent>
+              </Card>
             )}
 
             {/* Station Management Section */}
@@ -1835,7 +2569,7 @@ const AdminDashboard = () => {
             )}
 
             {/* Other sections can be added here */}
-            {activeSection !== 'dashboard' && activeSection !== 'users' && activeSection !== 'corporate-admins' && activeSection !== 'add-corporate-admin' && activeSection !== 'vehicles' && activeSection !== 'settings' && (
+            {activeSection !== 'dashboard' && activeSection !== 'users' && activeSection !== 'corporate-admins' && activeSection !== 'add-corporate-admin' && activeSection !== 'vehicles' && activeSection !== 'settings' && activeSection !== 'analytics' && activeSection !== 'stations' && (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <Typography variant="h5" color="text.secondary">
                   {navigationItems.find(item => item.id === activeSection)?.label} - Coming Soon

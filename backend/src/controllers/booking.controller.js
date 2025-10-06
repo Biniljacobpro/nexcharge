@@ -1,11 +1,14 @@
 import Booking from '../models/booking.model.js';
 import Station from '../models/station.model.js';
 import User from '../models/user.model.js';
+import { createBookingNotification } from './notification.controller.js';
 
 // Create a new booking
 export const createBooking = async (req, res) => {
   try {
+    console.log('=== Creating booking ===');
     const userId = req.user.sub || req.user.id;
+    console.log('User ID:', userId);
     const {
       stationId,
       chargerType,
@@ -16,9 +19,19 @@ export const createBooking = async (req, res) => {
       targetCharge,
       notes
     } = req.body;
+    console.log('Request body:', req.body);
 
-    // Validate required fields
-    if (!stationId || !chargerType || !startTime || !endTime || !vehicleId || !currentCharge || !targetCharge) {
+    // Validate required fields (allow 0 values for charges)
+    const missing = (
+      !stationId ||
+      !chargerType ||
+      !startTime ||
+      !endTime ||
+      !vehicleId ||
+      (currentCharge === null || currentCharge === undefined) ||
+      (targetCharge === null || targetCharge === undefined)
+    );
+    if (missing) {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: stationId, chargerType, startTime, endTime, vehicleId, currentCharge, targetCharge'
@@ -26,7 +39,13 @@ export const createBooking = async (req, res) => {
     }
 
     // Check if station exists
+    console.log('Looking for station:', stationId);
     const station = await Station.findById(stationId);
+    console.log('Station found:', station ? 'Yes' : 'No');
+    if (station) {
+      console.log('Station name:', station.name);
+      console.log('Station pricing:', JSON.stringify(station.pricing, null, 2));
+    }
     if (!station) {
       return res.status(404).json({
         success: false,
@@ -43,8 +62,10 @@ export const createBooking = async (req, res) => {
     }
 
     // Check if vehicle exists and is active
+    console.log('Looking for vehicle:', vehicleId);
     const Vehicle = (await import('../models/vehicle.model.js')).default;
     const vehicle = await Vehicle.findById(vehicleId);
+    console.log('Vehicle found:', vehicle ? 'Yes' : 'No', vehicle?.isActive ? 'Active' : 'Inactive');
     if (!vehicle || !vehicle.isActive) {
       return res.status(404).json({
         success: false,
@@ -65,6 +86,41 @@ export const createBooking = async (req, res) => {
         success: false,
         message: 'Target charge must be higher than current charge'
       });
+    }
+
+    // Ensure chargers array is present - if not, generate based on capacity
+    console.log('Station chargers:', station.capacity?.chargers?.length || 0);
+    if (!Array.isArray(station.capacity?.chargers) || station.capacity.chargers.length === 0) {
+      console.log('Generating chargers for station');
+      station.capacity.chargers = [];
+      const types = Array.isArray(station.capacity?.chargerTypes) ? station.capacity.chargerTypes : [];
+      const total = Number(station.capacity?.totalChargers || 0);
+      const perType = types.length > 0 ? Math.ceil(total / types.length) : total;
+      types.forEach((type, typeIndex) => {
+        for (let i = 0; i < perType && station.capacity.chargers.length < total; i++) {
+          station.capacity.chargers.push({
+            chargerId: `${type}_${typeIndex}_${i}`,
+            type,
+            power: station.capacity?.maxPowerPerCharger || 7,
+            isAvailable: true,
+            currentBooking: null
+          });
+        }
+      });
+      if (station.capacity.chargers.length === 0 && total > 0) {
+        // fallback single charger with requested type
+        station.capacity.chargers.push({
+          chargerId: `${chargerType}_0_0`,
+          type: chargerType,
+          power: station.capacity?.maxPowerPerCharger || 7,
+          isAvailable: true,
+          currentBooking: null
+        });
+      }
+      if (typeof station.capacity.availableSlots !== 'number') {
+        station.capacity.availableSlots = Math.max(0, total);
+      }
+      await station.save();
     }
 
     // Find available charger of the requested type
@@ -118,46 +174,149 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    // Calculate duration and pricing
-    const duration = Math.round((end - start) / (1000 * 60)); // minutes
-    const estimatedEnergy = vehicle.batteryCapacity ? 
-      (vehicle.batteryCapacity * (targetCharge - currentCharge) / 100) : 0;
-    const estimatedCost = estimatedEnergy * (station.pricing?.basePrice || 0);
-
-    // Create booking
-    const booking = new Booking({
+    // Check for user's overlapping bookings across all stations (unless different vehicle)
+    const userOverlappingBooking = await Booking.findOne({
       userId,
-      stationId,
-      chargerId: availableCharger.chargerId,
-      chargerType,
-      startTime: start,
-      endTime: end,
-      duration,
-      vehicleId,
-      currentCharge,
-      targetCharge,
-      pricing: {
-        basePrice: station.pricing?.basePrice || 0,
-        estimatedEnergy,
-        estimatedCost
-      },
-      notes,
-      status: 'confirmed'
+      vehicleId, // Same vehicle cannot be at two places at once
+      status: { $in: ['pending', 'confirmed', 'active'] },
+      $or: [
+        {
+          startTime: { $lt: end },
+          endTime: { $gt: start }
+        }
+      ]
     });
 
-    await booking.save();
+    if (userOverlappingBooking) {
+      return res.status(400).json({
+        success: false,
+        message: 'You already have a booking during this time period with the same vehicle. Use a different vehicle or choose a different time slot.'
+      });
+    }
 
-    // Update station charger availability
+    // Calculate duration and pricing (per-minute pricing)
+    const duration = Math.round((end - start) / (1000 * 60)); // minutes
+    
+    // Ensure station has pricing.pricePerMinute - if not, set a default and save
+    if (!station.pricing?.pricePerMinute) {
+      console.log('Station missing pricePerMinute, setting default of 10');
+      if (!station.pricing) station.pricing = {};
+      station.pricing.pricePerMinute = 10; // Default ₹10 per minute
+      await station.save();
+    }
+    
+    const pricePerMinute = Number(station.pricing.pricePerMinute);
+    const estimatedEnergy = 0; // not used in per-minute pricing
+    const estimatedCost = duration * pricePerMinute;
+
+    // Update station charger availability FIRST (before creating booking)
     availableCharger.isAvailable = false;
-    availableCharger.currentBooking = booking._id;
-    station.capacity.availableSlots = station.capacity.availableSlots - 1;
+    availableCharger.currentBooking = null; // Will be set after booking is created
+    
+    // Safely update availableSlots
+    const slots = station?.capacity?.availableSlots;
+    if (typeof slots === 'number' && Number.isFinite(slots)) {
+      station.capacity.availableSlots = Math.max(0, slots - 1);
+    } else if (Array.isArray(station?.capacity?.chargers)) {
+      station.capacity.availableSlots = station.capacity.chargers.filter(c => c.isAvailable).length;
+    } else {
+      const total = Number(station?.capacity?.totalChargers || 0);
+      station.capacity.availableSlots = Math.max(0, total - 1);
+    }
+    
+    // Ensure station has required pricing before saving
+    if (!station.pricing?.pricePerMinute) {
+      console.log('Station missing pricePerMinute before save, adding default');
+      if (!station.pricing) station.pricing = {};
+      station.pricing.pricePerMinute = 10;
+    }
+    
     await station.save();
 
-    // Populate booking details
-    await booking.populate([
-      { path: 'userId', select: 'personalInfo.firstName personalInfo.lastName personalInfo.email' },
-      { path: 'stationId', select: 'name location' }
-    ]);
+    // Create booking with error handling
+    let booking;
+    try {
+      console.log('Creating booking object with data:', {
+        userId,
+        stationId,
+        chargerId: availableCharger.chargerId,
+        chargerType,
+        startTime: start,
+        endTime: end,
+        duration,
+        vehicleId,
+        currentCharge,
+        targetCharge,
+        pricing: {
+          basePrice: pricePerMinute,
+          estimatedEnergy,
+          estimatedCost
+        },
+        notes,
+        status: 'confirmed'
+      });
+
+      booking = new Booking({
+        userId,
+        stationId,
+        chargerId: availableCharger.chargerId,
+        chargerType,
+        startTime: start,
+        endTime: end,
+        duration,
+        vehicleId,
+        currentCharge,
+        targetCharge,
+        pricing: {
+          basePrice: pricePerMinute, // repurpose basePrice to store per-minute price
+          estimatedEnergy,
+          estimatedCost
+        },
+        notes,
+        status: 'confirmed'
+      });
+
+      console.log('Saving booking to database...');
+      await booking.save();
+      console.log('Booking saved successfully with ID:', booking._id);
+
+      // Update charger with booking reference
+      availableCharger.currentBooking = booking._id;
+      
+      // Ensure station still has required pricing before final save
+      if (!station.pricing?.pricePerMinute) {
+        console.log('Station missing pricePerMinute before final save, adding default');
+        if (!station.pricing) station.pricing = {};
+        station.pricing.pricePerMinute = 10;
+      }
+      
+      await station.save();
+    } catch (bookingError) {
+      // Rollback station changes if booking creation fails
+      availableCharger.isAvailable = true;
+      availableCharger.currentBooking = null;
+      if (typeof station.capacity.availableSlots === 'number') {
+        station.capacity.availableSlots = station.capacity.availableSlots + 1;
+      }
+      
+      // Ensure station has required pricing before rollback save
+      if (!station.pricing?.pricePerMinute) {
+        console.log('Station missing pricePerMinute before rollback save, adding default');
+        if (!station.pricing) station.pricing = {};
+        station.pricing.pricePerMinute = 10;
+      }
+      
+      await station.save();
+      throw bookingError;
+    }
+
+    // Populate booking details (do not fail booking if populate throws)
+    try {
+      await booking.populate([
+        { path: 'userId', select: 'personalInfo.firstName personalInfo.lastName personalInfo.email' },
+        { path: 'stationId', select: 'name location' }
+      ]);
+    } catch (_) {}
 
     res.status(201).json({
       success: true,
@@ -167,9 +326,12 @@ export const createBooking = async (req, res) => {
 
   } catch (error) {
     console.error('Error creating booking:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Request body was:', req.body);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -301,6 +463,41 @@ export const getUserBookings = async (req, res) => {
       }));
     }
 
+    // Clean up orphaned bookings that might have been created during failed API calls
+    // These are bookings created in the last 5 minutes that don't have proper charger allocation
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const recentBookings = await Booking.find({
+      userId,
+      status: { $in: ['pending', 'confirmed'] },
+      createdAt: { $gte: fiveMinutesAgo }
+    });
+    
+    for (const booking of recentBookings) {
+      try {
+        const station = await Station.findById(booking.stationId);
+        if (station) {
+          const charger = station.capacity?.chargers?.find(c => c.chargerId === booking.chargerId);
+          // If charger doesn't exist or is available but has this booking, it's orphaned
+          if (!charger || (charger.isAvailable && charger.currentBooking?.toString() === booking._id.toString())) {
+            // Cancel the orphaned booking
+            booking.status = 'cancelled';
+            booking.cancellationReason = 'System cleanup - booking was not properly allocated';
+            booking.cancelledAt = now;
+            await booking.save();
+            
+            // Ensure charger is available
+            if (charger) {
+              charger.isAvailable = true;
+              charger.currentBooking = null;
+              await station.save();
+            }
+          }
+        }
+      } catch (e) {
+        // Continue with other bookings if one fails
+      }
+    }
+
     const query = { userId };
     if (status) {
       query.status = status;
@@ -427,6 +624,14 @@ export const cancelBooking = async (req, res) => {
       }
     }
 
+    // Create notification for booking cancellation
+    try {
+      await createBookingNotification(userId, 'booking_cancelled', booking, station);
+    } catch (notificationError) {
+      console.error('Error creating cancellation notification:', notificationError);
+      // Don't fail the cancellation if notification fails
+    }
+
     res.json({
       success: true,
       message: 'Booking cancelled successfully',
@@ -435,6 +640,208 @@ export const cancelBooking = async (req, res) => {
 
   } catch (error) {
     console.error('Error cancelling booking:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Complete ongoing booking early
+export const completeBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.sub || req.user.id;
+
+    const booking = await Booking.findOne({ _id: bookingId, userId });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.status !== 'active' && booking.status !== 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only active or confirmed bookings can be completed'
+      });
+    }
+
+    const now = new Date();
+    const startTime = new Date(booking.startTime);
+    const endTime = new Date(booking.endTime);
+
+    // Check if booking has actually started
+    if (now < startTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot complete booking before it starts'
+      });
+    }
+
+    // Update booking status
+    booking.status = 'completed';
+    booking.actualEndTime = now;
+    booking.completedAt = now;
+
+    // Calculate actual duration and cost
+    const actualDurationMs = now - startTime;
+    const actualDurationMinutes = Math.ceil(actualDurationMs / (1000 * 60));
+    const pricePerMinute = booking.pricing?.pricePerMinute || 10;
+    const actualCost = actualDurationMinutes * pricePerMinute;
+
+    booking.actualDuration = actualDurationMinutes;
+    booking.pricing.actualCost = actualCost;
+
+    await booking.save();
+
+    // Free up the charger
+    const station = await Station.findById(booking.stationId);
+    if (station) {
+      const charger = station.capacity?.chargers?.find(
+        c => c.chargerId === booking.chargerId
+      );
+      if (charger) {
+        charger.isAvailable = true;
+        charger.currentBooking = null;
+        station.capacity.availableSlots = Math.min(
+          station.capacity.totalChargers,
+          (station.capacity.availableSlots || 0) + 1
+        );
+        await station.save();
+      }
+    }
+
+    // Create notification for booking completion
+    try {
+      await createBookingNotification(userId, 'booking_completed', booking, station);
+    } catch (notificationError) {
+      console.error('Error creating completion notification:', notificationError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Booking completed successfully',
+      data: {
+        booking,
+        savedTime: Math.max(0, Math.ceil((endTime - now) / (1000 * 60))),
+        actualCost,
+        originalCost: booking.pricing?.estimatedCost || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error completing booking:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Extend booking duration
+export const extendBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.sub || req.user.id;
+    const { additionalMinutes } = req.body;
+
+    if (!additionalMinutes || additionalMinutes <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Additional minutes must be greater than 0'
+      });
+    }
+
+    const booking = await Booking.findOne({ _id: bookingId, userId });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.status !== 'confirmed' && booking.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only confirmed or active bookings can be extended'
+      });
+    }
+
+    const currentEndTime = new Date(booking.endTime);
+    const newEndTime = new Date(currentEndTime.getTime() + (additionalMinutes * 60 * 1000));
+
+    // Check for overlapping bookings at the same station
+    const overlappingBookings = await Booking.find({
+      stationId: booking.stationId,
+      chargerType: booking.chargerType,
+      status: { $in: ['confirmed', 'active'] },
+      _id: { $ne: bookingId },
+      $or: [
+        { startTime: { $lt: newEndTime }, endTime: { $gt: currentEndTime } }
+      ]
+    });
+
+    if (overlappingBookings.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot extend booking due to conflicting reservations',
+        conflictingBookings: overlappingBookings.length
+      });
+    }
+
+    // Check for user's overlapping bookings across all stations (unless different vehicle)
+    const userOverlappingBookings = await Booking.find({
+      userId,
+      vehicleId: booking.vehicleId, // Same vehicle cannot be at two places at once
+      status: { $in: ['confirmed', 'active'] },
+      _id: { $ne: bookingId },
+      $or: [
+        { startTime: { $lt: newEndTime }, endTime: { $gt: currentEndTime } }
+      ]
+    });
+
+    if (userOverlappingBookings.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot extend booking - you have another booking with the same vehicle during the extended time period.'
+      });
+    }
+
+    // Calculate additional cost
+    const pricePerMinute = booking.pricing?.pricePerMinute || 10;
+    const additionalCost = additionalMinutes * pricePerMinute;
+
+    // Update booking
+    booking.endTime = newEndTime;
+    booking.duration = booking.duration + additionalMinutes;
+    booking.pricing.estimatedCost = (booking.pricing.estimatedCost || 0) + additionalCost;
+    booking.extensionHistory = booking.extensionHistory || [];
+    booking.extensionHistory.push({
+      extendedAt: new Date(),
+      additionalMinutes,
+      additionalCost,
+      newEndTime
+    });
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Booking extended successfully',
+      data: {
+        booking,
+        additionalCost,
+        newEndTime,
+        additionalMinutes
+      }
+    });
+
+  } catch (error) {
+    console.error('Error extending booking:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

@@ -11,7 +11,9 @@ import {
   getCorporateStations,
   updateCorporateStationStatus,
   getCorporateInfo,
-  updateCorporateName
+  updateCorporateName,
+  getCorporateUsers,
+  updateCorporateUserStatus
 } from '../controllers/corporate.controller.js';
 
 const router = Router();
@@ -38,5 +40,8 @@ router.delete('/franchises/:franchiseId', deleteFranchiseOwner);
 router.get('/stations', getCorporateStations);
 router.patch('/stations/:id/status', updateCorporateStationStatus);
 
+// User management routes
+router.get('/users', getCorporateUsers);
+router.put('/users/:id/status', updateCorporateUserStatus);
 
 export default router;

@@ -122,22 +122,17 @@ const StationSchema = new mongoose.Schema({
     }]
   },
 
-  // Pricing & Policies
+  // Pricing & Policies (only per-minute pricing supported)
   pricing: {
-    model: { 
-      type: String, 
-      enum: ['per_kwh', 'per_minute', 'flat_fee', 'dynamic'],
-      required: true,
-      default: 'per_kwh'
-    },
-    basePrice: { 
-      type: Number, 
-      required: true,
+    pricePerMinute: {
+      type: Number,
+      required: false, // Made optional to support existing stations
+      default: 10, // Default ₹10 per minute
       min: 1,
-      max: 5000 // ₹5000 per unit
+      max: 5000 // ₹5000 per minute
     },
-    cancellationPolicy: { 
-      type: String, 
+    cancellationPolicy: {
+      type: String,
       trim: true,
       maxlength: 1000
     }
@@ -362,7 +357,8 @@ StationSchema.index({ 'location.city': 1 });
 StationSchema.index({ 'location.state': 1 });
 StationSchema.index({ 'operational.status': 1 });
 StationSchema.index({ 'capacity.chargerTypes': 1 });
-StationSchema.index({ 'pricing.model': 1 });
+// Index on price for faster range queries
+StationSchema.index({ 'pricing.pricePerMinute': 1 });
 StationSchema.index({ 'analytics.rating': -1 });
 StationSchema.index({ 'analytics.totalRevenue': -1 });
 StationSchema.index({ createdAt: -1 });

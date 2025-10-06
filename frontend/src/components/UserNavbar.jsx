@@ -21,6 +21,7 @@ import {
   HelpOutline as SupportIcon,
   KeyboardArrowDown as ArrowDownIcon
 } from '@mui/icons-material';
+import NotificationDropdown from './NotificationDropdown';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import nexchargeLogo from '../assets/nexcharge-high-resolution-logo-transparent.png';
@@ -97,10 +98,10 @@ const UserNavbar = ({ user }) => {
             <Button color="inherit" sx={{ color: '#1f2937', fontWeight: 500 }} onClick={() => navigate('/home')} startIcon={<HomeIcon />}>
               Home
             </Button>
-            <Button color="inherit" sx={{ color: '#1f2937', fontWeight: 500 }} startIcon={<StationsIcon />}>
+            <Button color="inherit" sx={{ color: '#1f2937', fontWeight: 500 }} onClick={() => navigate('/stations')} startIcon={<StationsIcon />}>
               Stations
             </Button>
-            <Button color="inherit" sx={{ color: '#1f2937', fontWeight: 500 }} startIcon={<BookingsIcon />}>
+            <Button color="inherit" sx={{ color: '#1f2937', fontWeight: 500 }} onClick={() => navigate('/bookings')} startIcon={<BookingsIcon />}>
               Bookings
             </Button>
             <Button color="inherit" sx={{ color: '#1f2937', fontWeight: 500 }} startIcon={<SupportIcon />}>
@@ -115,6 +116,9 @@ const UserNavbar = ({ user }) => {
             transition={{ duration: 0.5 }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {/* Notification Bell */}
+              <NotificationDropdown />
+              
               {/* User Avatar and Menu */}
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Avatar 

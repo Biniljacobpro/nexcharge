@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Drawer,
@@ -87,10 +87,12 @@ import {
   ExpandMore,
   BatteryChargingFull
 } from '@mui/icons-material';
+import { PhotoCamera as PhotoCameraIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { franchiseOwnerService } from '../services/franchiseOwnerService';
+import { updatePasswordApi, uploadProfileImageApi, getMe, updateProfileApi } from '../utils/api';
 import nexchargeLogo from '../assets/nexcharge-high-resolution-logo-transparent.png';
 
 const drawerWidth = 280;
@@ -113,6 +115,13 @@ const FranchiseOwnerDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const fileInputRef = useRef(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [editProfileDialog, setEditProfileDialog] = useState(false);
+  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '', address: '' });
+  const [profileLoading, setProfileLoading] = useState(false);
   const navigate = useNavigate();
 
   // Station management state
@@ -140,9 +149,8 @@ const FranchiseOwnerDashboard = () => {
     maxPowerPerCharger: '',
     totalPowerCapacity: '',
     
-    // Pricing & Policies
-    pricingModel: 'per_kwh',
-    basePrice: '',
+    // Pricing & Policies (only per-minute)
+    pricePerMinute: '',
     cancellationPolicy: '',
     
     // Operational Details
@@ -194,12 +202,102 @@ const FranchiseOwnerDashboard = () => {
 
   const loadUserData = async () => {
     try {
-      const { getMe } = await import('../utils/api');
       const me = await getMe();
       setUser(me);
     } catch (error) {
       console.error('Error loading user data:', error);
       navigate('/login');
+    }
+  };
+
+  const handlePickProfileImage = () => {
+    if (uploadingAvatar) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleProfileFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingAvatar(true);
+      const res = await uploadProfileImageApi(file);
+      // The backend uploadProfileImage function directly updates the user and returns user data
+      if (res?.user) {
+        setUser(res.user);
+        setSnackbar({ open: true, message: 'Profile photo updated', severity: 'success' });
+      } else {
+        // Fallback: refresh user data
+        const refreshed = await getMe();
+        setUser(refreshed);
+        setSnackbar({ open: true, message: 'Profile photo updated', severity: 'success' });
+      }
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'Failed to upload profile image', severity: 'error' });
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setSnackbar({ open: true, message: 'Please fill all password fields', severity: 'warning' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setSnackbar({ open: true, message: 'New passwords do not match', severity: 'error' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setSnackbar({ open: true, message: 'New password must be at least 8 characters', severity: 'warning' });
+      return;
+    }
+    try {
+      setPasswordLoading(true);
+      await updatePasswordApi({ currentPassword, newPassword });
+      setSnackbar({ open: true, message: 'Password updated successfully', severity: 'success' });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'Failed to update password', severity: 'error' });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleEditProfile = () => {
+    // Pre-fill form with current user data
+    setProfileForm({
+      firstName: user?.firstName || user?.personalInfo?.firstName || '',
+      lastName: user?.lastName || user?.personalInfo?.lastName || '',
+      phone: user?.phone || user?.personalInfo?.phone || '',
+      address: user?.address || user?.personalInfo?.address || ''
+    });
+    setEditProfileDialog(true);
+  };
+
+  const handleUpdateProfile = async () => {
+    const { firstName, lastName, phone, address } = profileForm;
+    if (!firstName.trim() || !lastName.trim()) {
+      setSnackbar({ open: true, message: 'First name and last name are required', severity: 'warning' });
+      return;
+    }
+    try {
+      setProfileLoading(true);
+      const response = await updateProfileApi({ firstName, lastName, phone, address });
+      if (response?.user) {
+        setUser(response.user);
+      } else {
+        // Fallback: refresh user data
+        const refreshed = await getMe();
+        setUser(refreshed);
+      }
+      setSnackbar({ open: true, message: 'Profile updated successfully', severity: 'success' });
+      setEditProfileDialog(false);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'Failed to update profile', severity: 'error' });
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -345,13 +443,15 @@ const FranchiseOwnerDashboard = () => {
                         Franchise Revenue
                       </Typography>
                       <Typography variant="h4" color="white" sx={{ fontWeight: 'bold' }}>
-                        ₹{dashboardData?.monthlyRevenue || 0}
+                        ₹{Number(dashboardData?.monthlyRevenue || 0).toLocaleString()}
                       </Typography>
                       <Typography color="white" variant="body2">
                         This month
                       </Typography>
                     </Box>
-                    <AttachMoney sx={{ fontSize: 40, color: 'white', opacity: 0.8 }} />
+                    <Typography sx={{ fontSize: 36, color: 'white', opacity: 0.85, lineHeight: 1, fontWeight: 700 }}>
+                      ₹
+                    </Typography>
                   </Box>
                 </CardContent>
               </Card>
@@ -524,8 +624,7 @@ const FranchiseOwnerDashboard = () => {
       chargerTypes: [],
       maxPowerPerCharger: '',
       totalPowerCapacity: '',
-      pricingModel: 'per_kwh',
-      basePrice: '',
+      pricePerMinute: '',
       cancellationPolicy: '',
       openingHours: '24/7',
       customHours: { start: '00:00', end: '23:59' },
@@ -565,8 +664,8 @@ const FranchiseOwnerDashboard = () => {
       chargerTypes: cap.chargerTypes || station.chargerTypes || [],
       maxPowerPerCharger: cap.maxPowerPerCharger ?? station.maxPowerPerCharger ?? '',
       totalPowerCapacity: cap.totalPowerCapacity ?? station.totalPowerCapacity ?? '',
-      pricingModel: pricing.pricingModel || station.pricingModel || 'per_kwh',
-      basePrice: pricing.basePrice ?? station.basePrice ?? '',
+      // Backward compatibility: fall back to legacy basePrice if present
+      pricePerMinute: pricing.pricePerMinute ?? pricing.basePrice ?? station.pricePerMinute ?? station.basePrice ?? '',
       cancellationPolicy: pricing.cancellationPolicy || station.cancellationPolicy || '',
       openingHours: op.openingHours || station.openingHours || '24/7',
       customHours: op.customHours || station.customHours || { start: '00:00', end: '23:59' },
@@ -639,9 +738,9 @@ const FranchiseOwnerDashboard = () => {
         setSnackbar({ open: true, message: 'Max power per charger must be between 1 and 500 kW', severity: 'error' });
         return;
       }
-      const basePriceNum = parseFloat(stationForm.basePrice);
-      if (Number.isNaN(basePriceNum) || basePriceNum < 1 || basePriceNum > 5000) {
-        setSnackbar({ open: true, message: 'Base price must be between ₹1 and ₹5000', severity: 'error' });
+      const ppmNum = parseFloat(stationForm.pricePerMinute);
+      if (Number.isNaN(ppmNum) || ppmNum < 1 || ppmNum > 5000) {
+        setSnackbar({ open: true, message: 'Price per minute must be between ₹1 and ₹5000', severity: 'error' });
         return;
       }
       const parkingSlotsNum = parseInt(stationForm.parkingSlots);
@@ -674,7 +773,7 @@ const FranchiseOwnerDashboard = () => {
         maxPowerPerCharger: maxPowerNum,
         // Send undefined if empty so backend computes automatically
         totalPowerCapacity: stationForm.totalPowerCapacity !== '' ? (parseFloat(stationForm.totalPowerCapacity) || 0) : undefined,
-        basePrice: basePriceNum,
+        pricePerMinute: ppmNum,
         parkingSlots: parkingSlotsNum,
         parkingFee: parkingFeeNum,
         latitude,
@@ -690,8 +789,11 @@ const FranchiseOwnerDashboard = () => {
       }
 
       setStationDialog({ open: false, mode: 'add', station: null });
-      loadDashboardData();
-      loadStations();
+      // Refresh data to update both Station Management and Manager Management sections
+      await Promise.all([
+        loadDashboardData(),
+        loadStations()
+      ]);
     } catch (error) {
       console.error('Error saving station:', error);
       setSnackbar({ open: true, message: error.message || 'Failed to save station', severity: 'error' });
@@ -705,8 +807,11 @@ const FranchiseOwnerDashboard = () => {
       try {
         await franchiseOwnerService.deleteStation(stationId);
         setSnackbar({ open: true, message: 'Station deleted successfully', severity: 'success' });
-        loadDashboardData();
-        loadStations();
+        // Refresh data to update both Station Management and Manager Management sections
+        await Promise.all([
+          loadDashboardData(),
+          loadStations()
+        ]);
       } catch (error) {
         console.error('Error deleting station:', error);
         setSnackbar({ open: true, message: error.message || 'Failed to delete station', severity: 'error' });
@@ -729,13 +834,21 @@ const FranchiseOwnerDashboard = () => {
   };
 
   const handleEditManager = (manager) => {
+    // Extract first and last name from the combined name field
+    const nameParts = (manager.name || '').split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    
+    // Get assigned station info
+    const assignedStation = manager.assignedStations?.[0];
+    
     setManagerForm({
-      firstName: manager.personalInfo?.firstName || manager.firstName || '',
-      lastName: manager.personalInfo?.lastName || manager.lastName || '',
-      email: manager.personalInfo?.email || manager.email || '',
-      phone: manager.personalInfo?.phone || manager.phone || '',
-      assignedStation: manager.assignedStation || manager.assignedStations?.[0]?.name || '',
-      stationId: manager.stationId || manager.assignedStations?.[0]?.id || ''
+      firstName: firstName,
+      lastName: lastName,
+      email: manager.email || '',
+      phone: manager.phone || '',
+      assignedStation: assignedStation?.name || 'unassigned',
+      stationId: assignedStation?.id || assignedStation?._id || ''
     });
     loadUnassignedStations();
     setManagerDialog({ open: true, mode: 'edit', manager });
@@ -792,7 +905,11 @@ const FranchiseOwnerDashboard = () => {
       }
 
       setManagerDialog({ open: false, mode: 'add', manager: null });
-      loadDashboardData(); // Refresh the dashboard data
+      // Refresh data to update both Station Management and Manager Management sections
+      await Promise.all([
+        loadDashboardData(),
+        loadUnassignedStations()
+      ]);
     } catch (error) {
       console.error('Error saving station manager:', error);
       setSnackbar({ open: true, message: error.message || 'Failed to save station manager', severity: 'error' });
@@ -806,7 +923,11 @@ const FranchiseOwnerDashboard = () => {
       try {
         await franchiseOwnerService.deleteStationManager(managerId);
         setSnackbar({ open: true, message: 'Station manager deleted successfully', severity: 'success' });
-        loadDashboardData();
+        // Refresh data to update both Station Management and Manager Management sections
+        await Promise.all([
+          loadDashboardData(),
+          loadStations()
+        ]);
       } catch (error) {
         console.error('Error deleting station manager:', error);
         setSnackbar({ open: true, message: error.message || 'Failed to delete station manager', severity: 'error' });
@@ -831,10 +952,12 @@ const FranchiseOwnerDashboard = () => {
         )
       );
       
-      // Refresh data
-      loadDashboardData();
-      loadStations();
-      loadUnassignedStations();
+      // Refresh data to update both Station Management and Manager Management sections
+      await Promise.all([
+        loadDashboardData(),
+        loadStations(),
+        loadUnassignedStations()
+      ]);
     } catch (error) {
       console.error('Error assigning station to manager:', error);
       setSnackbar({ open: true, message: error.message || 'Failed to assign station to manager', severity: 'error' });
@@ -857,14 +980,45 @@ const FranchiseOwnerDashboard = () => {
           )
         );
         
-        // Refresh data
-        loadDashboardData();
-        loadStations();
-        loadUnassignedStations();
+        // Refresh data to update both Station Management and Manager Management sections
+        await Promise.all([
+          loadDashboardData(),
+          loadStations(),
+          loadUnassignedStations()
+        ]);
       } catch (error) {
         console.error('Error unassigning station from manager:', error);
         setSnackbar({ open: true, message: error.message || 'Failed to unassign station from manager', severity: 'error' });
       }
+    }
+  };
+
+  // Handle station status change
+  const handleStationStatusChange = async (stationId, newStatus) => {
+    try {
+      await franchiseOwnerService.updateStation(stationId, {
+        status: newStatus,
+        operational: { status: newStatus }
+      });
+      
+      setSnackbar({ 
+        open: true, 
+        message: `Station status updated to ${newStatus}`, 
+        severity: 'success' 
+      });
+      
+      // Refresh stations data
+      await Promise.all([
+        loadDashboardData(),
+        loadStations()
+      ]);
+    } catch (error) {
+      console.error('Error updating station status:', error);
+      setSnackbar({ 
+        open: true, 
+        message: error.message || 'Failed to update station status', 
+        severity: 'error' 
+      });
     }
   };
 
@@ -894,6 +1048,65 @@ const FranchiseOwnerDashboard = () => {
         </Button>
       </Box>
 
+      {/* Station Overview Card */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Station Overview
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Monitor and manage charging stations across your network
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={6}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Total Stations
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {stations?.length || 0}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Active Stations
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                      {stations?.filter(s => (s.operational?.status || s.status) === 'active').length || 0}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Maintenance Required
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                      {stations?.filter(s => (s.operational?.status || s.status) === 'maintenance').length || 0}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Average Utilization
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'info.main' }}>
+                      {stations?.length > 0 ? 
+                        Math.round(stations.reduce((acc, s) => acc + (s.utilization || 0), 0) / stations.length) : 0}%
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
       {/* Stations List */}
       <Grid container spacing={3}>
         {stationsLoading && (
@@ -911,14 +1124,33 @@ const FranchiseOwnerDashboard = () => {
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      {station.name || 'Station Name'}
-                    </Typography>
-                    <Chip
-                      label={(station.operational?.status || station.status || 'active')}
-                      color={(station.operational?.status || station.status) === 'active' ? 'success' : (station.operational?.status || station.status) === 'maintenance' ? 'warning' : 'error'}
-                      size="small"
-                    />
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        {station.name || 'Station Name'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Code: {station.code || 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Chip
+                        label={(station.operational?.status || station.status || 'active')}
+                        color={(station.operational?.status || station.status) === 'active' ? 'success' : (station.operational?.status || station.status) === 'maintenance' ? 'warning' : 'error'}
+                        size="small"
+                      />
+                      <FormControl size="small" sx={{ minWidth: 80 }}>
+                        <InputLabel>Status</InputLabel>
+                        <Select
+                          value={station.operational?.status || station.status || 'active'}
+                          label="Status"
+                          onChange={(e) => handleStationStatusChange(station._id || station.id, e.target.value)}
+                        >
+                          <MenuItem value="active">Active</MenuItem>
+                          <MenuItem value="maintenance">Maintenance</MenuItem>
+                          <MenuItem value="inactive">Inactive</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
                   </Box>
                   
                   <Box sx={{ mb: 2 }}>
@@ -1217,7 +1449,7 @@ const FranchiseOwnerDashboard = () => {
               </AccordionDetails>
             </Accordion>
 
-            {/* Pricing & Policies */}
+            {/* Pricing & Policies (Per-Minute only) */}
             <Accordion>
               <AccordionSummary expandIcon={<ExpandMore />}>
                 <Box display="flex" alignItems="center" gap={2}>
@@ -1228,26 +1460,12 @@ const FranchiseOwnerDashboard = () => {
               <AccordionDetails>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth required disabled={stationDialog.mode === 'view'}>
-                      <InputLabel>Pricing Model</InputLabel>
-                      <Select
-                        value={stationForm.pricingModel}
-                        onChange={(e) => setStationForm({ ...stationForm, pricingModel: e.target.value })}
-                      >
-                        <SelectMenuItem value="per_kwh">Per kWh</SelectMenuItem>
-                        <SelectMenuItem value="per_minute">Per Minute</SelectMenuItem>
-                        <SelectMenuItem value="flat_fee">Flat Fee</SelectMenuItem>
-                        <SelectMenuItem value="dynamic">Dynamic Pricing</SelectMenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
-                      label="Base Price"
+                      label="Price Per Minute (₹/min)"
                       type="number"
-                      value={stationForm.basePrice}
-                      onChange={(e) => setStationForm({ ...stationForm, basePrice: e.target.value })}
+                      value={stationForm.pricePerMinute}
+                      onChange={(e) => setStationForm({ ...stationForm, pricePerMinute: e.target.value })}
                       required
                       disabled={stationDialog.mode === 'view'}
                       inputProps={{ min: 1, max: 5000, step: 0.01 }}
@@ -1750,6 +1968,15 @@ const FranchiseOwnerDashboard = () => {
                     <MenuItem value="unassigned">
                       <em>Unassigned (Assign Later)</em>
                     </MenuItem>
+                    {/* Show currently assigned station if in edit mode */}
+                    {managerDialog.mode === 'edit' && managerDialog.manager?.assignedStations?.[0] && (
+                      <MenuItem 
+                        key={managerDialog.manager.assignedStations[0]._id} 
+                        value={managerDialog.manager.assignedStations[0].name}
+                      >
+                        {managerDialog.manager.assignedStations[0].name} - {managerDialog.manager.assignedStations[0].address || ''} (Currently Assigned)
+                      </MenuItem>
+                    )}
                     {unassignedStations.map((station) => (
                       <MenuItem key={station._id} value={station.name}>
                         {station.name} - {station.location?.address || station.address || ''}
@@ -1855,13 +2082,19 @@ const FranchiseOwnerDashboard = () => {
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent, value }) => value > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
+                      labelLine={false}
                     >
                       {dashboardData?.stationPerformance?.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={['#00b894', '#0984e3', '#e17055'][index % 3]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip formatter={(value, name) => [`${value} stations`, name]} />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36}
+                      formatter={(value, entry) => `${value}: ${entry.payload.value || 0}`}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -2127,6 +2360,49 @@ const FranchiseOwnerDashboard = () => {
       </Typography>
 
       <Grid container spacing={3}>
+        {/* Avatar & identity */}
+        <Grid item xs={12} md={6}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+          >
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Box sx={{ position: 'relative' }}>
+                    <Avatar
+                      src={user?.profileImage || user?.personalInfo?.profileImage || undefined}
+                      sx={{ width: 80, height: 80 }}
+                    />
+                    <IconButton
+                      onClick={handlePickProfileImage}
+                      size="medium"
+                      sx={{ position: 'absolute', right: -6, bottom: -6, bgcolor: 'background.paper', boxShadow: 2 }}
+                      disabled={uploadingAvatar}
+                    >
+                      <PhotoCameraIcon />
+                    </IconButton>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfileFileSelected}
+                      style={{ display: 'none' }}
+                    />
+                  </Box>
+                </Box>
+                <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  {(user?.firstName || user?.personalInfo?.firstName || '') + ' ' + (user?.lastName || user?.personalInfo?.lastName || '')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {user?.email || user?.personalInfo?.email || ''}
+                </Typography>
+                <Chip label={user?.role || 'franchise_owner'} variant="outlined" color="primary" />
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
         {/* Personal Information */}
         <Grid item xs={12} md={6}>
           <motion.div
@@ -2144,7 +2420,7 @@ const FranchiseOwnerDashboard = () => {
                     Name
                   </Typography>
                   <Typography variant="body1">
-                    {user?.personalInfo?.firstName} {user?.personalInfo?.lastName}
+                    {(user?.firstName || user?.personalInfo?.firstName || '') + ' ' + (user?.lastName || user?.personalInfo?.lastName || '')}
                   </Typography>
                 </Box>
                 <Box sx={{ mb: 2 }}>
@@ -2152,7 +2428,7 @@ const FranchiseOwnerDashboard = () => {
                     Email
                   </Typography>
                   <Typography variant="body1">
-                    {user?.personalInfo?.email}
+                    {user?.email || user?.personalInfo?.email || ''}
                   </Typography>
                 </Box>
                 <Box sx={{ mb: 2 }}>
@@ -2160,10 +2436,10 @@ const FranchiseOwnerDashboard = () => {
                     Phone
                   </Typography>
                   <Typography variant="body1">
-                    {user?.personalInfo?.phone}
+                    {user?.phone || user?.personalInfo?.phone || ''}
                   </Typography>
                 </Box>
-                <Button variant="outlined" startIcon={<EditIcon />}>
+                <Button variant="outlined" startIcon={<EditIcon />} onClick={handleEditProfile}>
                   Edit Profile
                 </Button>
               </CardContent>
@@ -2197,6 +2473,8 @@ const FranchiseOwnerDashboard = () => {
                       fontSize: '14px'
                     }}
                     placeholder="Enter current password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm(f => ({ ...f, currentPassword: e.target.value }))}
                   />
                 </Box>
                 <Box sx={{ mb: 2 }}>
@@ -2213,6 +2491,8 @@ const FranchiseOwnerDashboard = () => {
                       fontSize: '14px'
                     }}
                     placeholder="Enter new password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm(f => ({ ...f, newPassword: e.target.value }))}
                   />
                 </Box>
                 <Box sx={{ mb: 2 }}>
@@ -2229,6 +2509,8 @@ const FranchiseOwnerDashboard = () => {
                       fontSize: '14px'
                     }}
                     placeholder="Confirm new password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm(f => ({ ...f, confirmPassword: e.target.value }))}
                   />
                 </Box>
                 <Button
@@ -2239,8 +2521,10 @@ const FranchiseOwnerDashboard = () => {
                       background: 'linear-gradient(135deg, #00a085, #00b894)'
                     }
                   }}
+                  disabled={passwordLoading}
+                  onClick={handleUpdatePassword}
                 >
-                  Update Password
+                  {passwordLoading ? 'Updating…' : 'Update Password'}
                 </Button>
               </CardContent>
             </Card>
@@ -2353,8 +2637,8 @@ const FranchiseOwnerDashboard = () => {
             onClick={handleMenuClick}
             color="inherit"
           >
-            <Avatar sx={{ bgcolor: '#00b894' }}>
-              {user?.personalInfo?.firstName?.charAt(0) || 'F'}
+            <Avatar src={user?.profileImage || user?.personalInfo?.profileImage || undefined} sx={{ bgcolor: '#00b894' }}>
+              {(!(user?.profileImage || user?.personalInfo?.profileImage) && (user?.firstName?.charAt(0) || user?.personalInfo?.firstName?.charAt(0) || 'F'))}
             </Avatar>
           </IconButton>
           <Menu
@@ -2372,7 +2656,7 @@ const FranchiseOwnerDashboard = () => {
             open={Boolean(anchorEl)}
             onClose={handleMenuClose}
           >
-            <MenuItem onClick={handleMenuClose}>
+            <MenuItem onClick={() => { setActiveSection('profile'); handleMenuClose(); }}>
               <ListItemIcon>
                 <ProfileIcon fontSize="small" />
               </ListItemIcon>
@@ -2443,6 +2727,63 @@ const FranchiseOwnerDashboard = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={editProfileDialog} onClose={() => setEditProfileDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Profile</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            <TextField
+              fullWidth
+              label="First Name"
+              value={profileForm.firstName}
+              onChange={(e) => setProfileForm(prev => ({ ...prev, firstName: e.target.value }))}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
+              label="Last Name"
+              value={profileForm.lastName}
+              onChange={(e) => setProfileForm(prev => ({ ...prev, lastName: e.target.value }))}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
+              label="Phone"
+              value={profileForm.phone}
+              onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
+              margin="normal"
+            />
+            <TextField
+              fullWidth
+              label="Address"
+              value={profileForm.address}
+              onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
+              margin="normal"
+              multiline
+              rows={3}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditProfileDialog(false)}>Cancel</Button>
+          <Button 
+            onClick={handleUpdateProfile} 
+            variant="contained" 
+            disabled={profileLoading}
+            sx={{
+              background: 'linear-gradient(135deg, #00b894, #00a085)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #00a085, #00b894)'
+              }
+            }}
+          >
+            {profileLoading ? 'Updating...' : 'Update Profile'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

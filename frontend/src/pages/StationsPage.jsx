@@ -4,10 +4,11 @@ import DirectionsIcon from '@mui/icons-material/Directions';
 import SearchIcon from '@mui/icons-material/Search';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import UserNavbar from '../components/UserNavbar';
-import InteractiveMap from '../components/InteractiveMap';
+import StationsWithGoogleMap from '../components/StationsWithGoogleMap';
 import Footer from '../components/Footer';
 import { getMe, getPublicStationsApi } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
+import { useRealTimeAvailability } from '../hooks/useRealTimeAvailability';
 
 const StationsPage = () => {
   const navigate = useNavigate();
@@ -17,6 +18,11 @@ const StationsPage = () => {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
+  const [selectedStation, setSelectedStation] = useState(null);
+
+  // Get station IDs for real-time availability
+  const stationIds = stations.map(s => s._id);
+  const { availability: realTimeAvailability } = useRealTimeAvailability(stationIds, 30000); // Refresh every 30 seconds
 
   useEffect(() => {
     (async () => {
@@ -42,6 +48,12 @@ const StationsPage = () => {
   useEffect(() => { loadStations(); // initial
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleGetDirections = (station, event) => {
+    event.stopPropagation();
+    setSelectedStation(station);
+  };
+
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -82,18 +94,21 @@ const StationsPage = () => {
                 )}
                 {stations.map((s) => {
               // Pricing label
-              const pricingLabel = s && typeof s.pricing === 'object'
-                ? (s.pricing.basePrice ? `${s.pricing.currency || '₹'}${s.pricing.basePrice}/kWh` : (s.pricing.model || 'Pricing'))
-                : (s?.pricing || null);
+              const pricingLabel = (() => {
+                if (!s || typeof s.pricing !== 'object') return s?.pricing || null;
+                const ppm = s.pricing.pricePerMinute ?? s.pricing.basePrice; // fallback to legacy
+                return typeof ppm === 'number' ? `₹${ppm}/minute` : 'Pricing';
+              })();
               // Connector types from capacity
               const chargerTypes = Array.isArray(s?.capacity?.chargerTypes)
                 ? s.capacity.chargerTypes.map((t) => (typeof t === 'string' ? t : (t?.type || 'charger')))
                 : [];
-              // Status and availability
+              // Status and availability (use real-time data if available)
               const rawStatus = s?.operational?.status;
               const isMaintenance = rawStatus === 'maintenance';
-              const available = typeof s?.availableSlots === 'number' ? s.availableSlots : undefined;
-              const total = typeof s?.capacity?.totalChargers === 'number' ? s.capacity.totalChargers : undefined;
+              const realtimeData = realTimeAvailability[s._id];
+              const available = realtimeData ? realtimeData.availableSlots : (typeof s?.availableSlots === 'number' ? s.availableSlots : undefined);
+              const total = realtimeData ? realtimeData.totalChargers : (typeof s?.capacity?.totalChargers === 'number' ? s.capacity.totalChargers : undefined);
               const statusText = isMaintenance
                 ? 'Under maintenance'
                 : (rawStatus === 'active' ? 'Ready for charging' : (typeof rawStatus === 'string' ? rawStatus : undefined));
@@ -102,11 +117,22 @@ const StationsPage = () => {
               const amenities = Array.isArray(s?.amenities) && s.amenities.length > 0 ? s.amenities : null;
               return (
               <Grid item xs={12} sm={6} md={6} lg={6} key={s._id}>
-                <Card elevation={2} onClick={() => navigate(`/stations/${s._id}`)} sx={{ height: '100%', display: 'flex', flexDirection: 'column', cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
+                <Card 
+                  elevation={selectedStation?._id === s._id ? 4 : 2} 
+                  onClick={() => navigate(`/stations/${s._id}`)} 
+                  sx={{ 
+                    height: '100%', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    cursor: 'pointer', 
+                    border: selectedStation?._id === s._id ? '2px solid #4285F4' : 'none',
+                    '&:hover': { boxShadow: 6 } 
+                  }}
+                >
                   <CardContent sx={{ p: 2, flex: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Typography variant="h6" sx={{ fontWeight: 700, mr: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name || 'Station'}</Typography>
-                      <IconButton size="small" onClick={(e) => { e.stopPropagation(); navigate(`/stations/${s._id}`); }}><DirectionsIcon /></IconButton>
+                      <IconButton size="small" onClick={(e) => handleGetDirections(s, e)}><DirectionsIcon /></IconButton>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', my: 1 }}>
                       {chargerTypes[0] && (
@@ -138,15 +164,16 @@ const StationsPage = () => {
               </Grid>
             </Grid>
 
-            {/* Right: Compact Map Panel */}
+            {/* Right: Google Maps Panel */}
             <Grid item xs={12} md={5} lg={4}>
-              <Card elevation={3} sx={{ position: 'sticky', top: 16 }}>
-                <CardContent sx={{ p: 0 }}>
-                  <Box sx={{ height: { xs: 320, md: 440 } }}>
-                    <InteractiveMap compact height={440} />
-                  </Box>
-                </CardContent>
-              </Card>
+              <Box sx={{ position: 'sticky', top: 16, height: { xs: 320, md: 440 } }}>
+                <StationsWithGoogleMap 
+                  stations={stations}
+                  selectedStation={selectedStation}
+                  onStationSelect={setSelectedStation}
+                  height={{ xs: 320, md: 440 }}
+                />
+              </Box>
             </Grid>
           </Grid>
         </Container>

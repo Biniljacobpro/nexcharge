@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getMe, getMyVehiclesApi } from '../utils/api';
+import { useSingleStationAvailability } from '../hooks/useRealTimeAvailability';
 import {
   Box,
   Container,
@@ -30,6 +31,7 @@ import {
 import UserNavbar from '../components/UserNavbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
+import GoogleMapsDirections from '../components/GoogleMapsDirections';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -51,6 +53,9 @@ const StationDetails = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Real-time availability for this station
+  const { availability: realTimeAvailability } = useSingleStationAvailability(id, 30000);
   const [bookingDialog, setBookingDialog] = useState(false);
   
   const [bookingForm, setBookingForm] = useState({
@@ -64,6 +69,7 @@ const StationDetails = () => {
   });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [directionsDialog, setDirectionsDialog] = useState(false);
   const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
   const API_ORIGIN = API_BASE.replace(/\/api$/, '');
 
@@ -199,11 +205,11 @@ const StationDetails = () => {
       setSnackbar({ open: true, message: 'Please fill all required fields including vehicle selection', severity: 'error' });
       return;
     }
-    // Validate charge fields
-    const curr = Number(bookingForm.currentCharge);
-    const targ = Number(bookingForm.targetCharge);
+    // Validate charge fields (use defaults if not provided since they're hidden)
+    const curr = Number(bookingForm.currentCharge || 20);
+    const targ = Number(bookingForm.targetCharge || 80);
     if (Number.isNaN(curr) || Number.isNaN(targ) || curr < 0 || curr > 100 || targ < 0 || targ > 100 || curr >= targ) {
-      setSnackbar({ open: true, message: 'Enter valid charge levels (0-100) and ensure Target > Current', severity: 'error' });
+      setSnackbar({ open: true, message: 'Invalid charge levels detected. Please try again.', severity: 'error' });
       return;
     }
 
@@ -222,42 +228,139 @@ const StationDetails = () => {
       const token = localStorage.getItem('accessToken');
       const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
       
-      const response = await fetch(`${apiBase}/bookings`, {
+      const requestBody = {
+        stationId: id,
+        chargerType: bookingForm.chargerType,
+        startTime: new Date(bookingForm.startTime).toISOString(),
+        endTime: new Date(bookingForm.endTime).toISOString(),
+        vehicleId: catalogMatch._id,
+        currentCharge: curr,
+        targetCharge: targ
+      };
+
+      console.log('Creating payment order:', requestBody);
+
+      // Create Razorpay order instead of direct booking
+      const response = await fetch(`${apiBase}/payments/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const result = await response.json();
+      console.log('Payment order response:', result);
+      
+      if (result.success) {
+        // Initialize Razorpay payment
+        const options = {
+          key: result.data.keyId,
+          amount: result.data.amount,
+          currency: result.data.currency,
+          name: 'NexCharge',
+          description: `Charging at ${result.data.stationName}`,
+          order_id: result.data.orderId,
+          handler: async function (response) {
+            console.log('Payment successful:', response);
+            await handlePaymentSuccess(response, result.data.bookingId);
+          },
+          prefill: {
+            name: user?.personalInfo?.firstName + ' ' + user?.personalInfo?.lastName,
+            email: user?.personalInfo?.email,
+            contact: user?.personalInfo?.phone
+          },
+          theme: {
+            color: '#1976d2'
+          },
+          modal: {
+            ondismiss: function() {
+              console.log('Payment cancelled by user');
+              setSnackbar({ open: true, message: 'Payment cancelled', severity: 'warning' });
+              setBookingLoading(false);
+            }
+          }
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } else {
+        const errorMsg = result.message || `Failed to create payment order (${response.status})`;
+        console.error('Payment order failed:', errorMsg, result);
+        setSnackbar({ open: true, message: errorMsg, severity: 'error' });
+        setBookingLoading(false);
+      }
+    } catch (err) {
+      console.error('Payment order error:', err);
+      const errorMsg = err?.message || 'Network error creating payment order';
+      setSnackbar({ open: true, message: errorMsg, severity: 'error' });
+      setBookingLoading(false);
+    }
+  };
+
+  const handlePaymentSuccess = async (paymentResponse, bookingId) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+
+      console.log('Verifying payment:', paymentResponse);
+
+      const verifyResponse = await fetch(`${apiBase}/payments/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          stationId: id,
-          chargerType: bookingForm.chargerType,
-          startTime: new Date(bookingForm.startTime).toISOString(),
-          endTime: new Date(bookingForm.endTime).toISOString(),
-          vehicleId: catalogMatch._id,
-          currentCharge: curr,
-          targetCharge: targ
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
+          bookingId: bookingId
         })
       });
 
-      const result = await response.json();
-      
-      if (result.success) {
-        setSnackbar({ open: true, message: 'Booking created successfully!', severity: 'success' });
+      const verifyResult = await verifyResponse.json();
+      console.log('Payment verification response:', verifyResult);
+
+      if (verifyResult.success) {
+        setSnackbar({ open: true, message: 'Payment successful! Booking confirmed.', severity: 'success' });
         setBookingDialog(false);
         // Refresh recent bookings list
         loadMyBookings();
+        // Refresh station details to reflect updated availability
+        try {
+          const stationRes = await fetch(`${API_BASE}/public/stations/${id}`, { cache: 'no-store' });
+          if (stationRes.ok) {
+            const stationBody = await stationRes.json();
+            if (stationBody?.data) setStation(stationBody.data);
+          }
+        } catch (_) {}
       } else {
-        setSnackbar({ open: true, message: result.message || 'Failed to create booking', severity: 'error' });
+        setSnackbar({ open: true, message: verifyResult.message || 'Payment verification failed', severity: 'error' });
       }
     } catch (err) {
-      setSnackbar({ open: true, message: 'Error creating booking', severity: 'error' });
+      console.error('Payment verification error:', err);
+      setSnackbar({ open: true, message: 'Payment verification failed', severity: 'error' });
     } finally {
       setBookingLoading(false);
     }
   };
 
-  // Calculate available chargers by type - if no individual chargers, use total available slots
+  // Calculate available chargers by type - use real-time availability data
   const getAvailableChargersByType = (type) => {
+    // Use real-time availability data if available
+    if (realTimeAvailability?.availabilityByType?.[type]) {
+      const typeData = realTimeAvailability.availabilityByType[type];
+      return Array.from({ length: typeData.available }, (_, i) => ({
+        chargerId: `realtime-${type}-${i}`,
+        type: type,
+        power: station?.capacity?.maxPowerPerCharger || 50,
+        isAvailable: true
+      }));
+    }
+    
+    // Fallback to static data
     const availableChargers = station?.capacity?.availableChargers || [];
     const chargersOfType = availableChargers.filter(c => c.type === type);
     
@@ -268,12 +371,13 @@ const StationDetails = () => {
     
     // Otherwise, if the station has this charger type, assume some are available
     const hasChargerType = station?.capacity?.chargerTypes?.includes(type);
-    if (hasChargerType && station?.capacity?.availableSlots > 0) {
+    const totalAvailable = realTimeAvailability?.availableSlots ?? station?.capacity?.availableSlots ?? 0;
+    if (hasChargerType && totalAvailable > 0) {
       // Return a mock array with available slots count
-      return Array.from({ length: Math.min(station.capacity.availableSlots, 5) }, (_, i) => ({
+      return Array.from({ length: Math.min(totalAvailable, 5) }, (_, i) => ({
         chargerId: `mock-${type}-${i}`,
         type: type,
-        power: station.capacity.maxPowerPerCharger,
+        power: station?.capacity?.maxPowerPerCharger || 50,
         isAvailable: true
       }));
     }
@@ -396,10 +500,16 @@ const StationDetails = () => {
                   <Chip
                     label={station.operational?.status === 'maintenance' 
                       ? '🚧 Under maintenance' 
-                      : (station.capacity?.availableSlots > 0 ? `⚡ ${station.capacity.availableSlots} Available` : '🚫 Full')}
+                      : (() => {
+                          const available = realTimeAvailability?.availableSlots ?? station.capacity?.availableSlots ?? 0;
+                          return available > 0 ? `⚡ ${available} Available` : '🚫 Full';
+                        })()}
                     color={station.operational?.status === 'maintenance' 
                       ? 'warning' 
-                      : (station.capacity?.availableSlots > 0 ? 'success' : 'error')}
+                      : (() => {
+                          const available = realTimeAvailability?.availableSlots ?? station.capacity?.availableSlots ?? 0;
+                          return available > 0 ? 'success' : 'error';
+                        })()}
                     variant="filled"
                     sx={{
                       fontSize: '1rem',
@@ -415,18 +525,10 @@ const StationDetails = () => {
                     mb: 1,
                     textShadow: '0 2px 8px rgba(0,0,0,0.3)'
                   }}>
-                    ₹{station.pricing?.basePrice ?? 0}
+                    ₹{station.pricing?.pricePerMinute ?? station.pricing?.basePrice ?? 0}
                   </Typography>
                   <Typography variant="body1" sx={{ opacity: 0.9, fontWeight: 500 }}>
-                    per kWh
-                  </Typography>
-                  <Typography variant="caption" sx={{
-                    opacity: 0.8,
-                    mt: 1,
-                    display: 'block',
-                    fontSize: '0.85rem'
-                  }}>
-                    Starting price
+                    per minute
                   </Typography>
                 </Box>
               </Grid>
@@ -472,20 +574,32 @@ const StationDetails = () => {
                       <Box sx={{
                         p: 2,
                         borderRadius: 2,
-                        bgcolor: station.capacity?.availableSlots > 0 ? '#f0fdf4' : '#fef2f2',
-                        border: `1px solid ${station.capacity?.availableSlots > 0 ? '#10b981' : '#dc2626'}`,
+                        bgcolor: (() => {
+                          const available = realTimeAvailability?.availableSlots ?? station.capacity?.availableSlots ?? 0;
+                          return available > 0 ? '#f0fdf4' : '#fef2f2';
+                        })(),
+                        border: (() => {
+                          const available = realTimeAvailability?.availableSlots ?? station.capacity?.availableSlots ?? 0;
+                          return `1px solid ${available > 0 ? '#10b981' : '#dc2626'}`;
+                        })(),
                         textAlign: 'center'
                       }}>
                         <Typography variant="h5" sx={{
                           fontWeight: 700,
-                          color: station.capacity?.availableSlots > 0 ? '#10b981' : '#dc2626',
+                          color: (() => {
+                            const available = realTimeAvailability?.availableSlots ?? station.capacity?.availableSlots ?? 0;
+                            return available > 0 ? '#10b981' : '#dc2626';
+                          })(),
                           mb: 0.5
                         }}>
-                          {station.capacity?.availableSlots ?? 0}
+                          {realTimeAvailability?.availableSlots ?? station.capacity?.availableSlots ?? 0}
                         </Typography>
                         <Typography variant="caption" sx={{
                           fontWeight: 500,
-                          color: station.capacity?.availableSlots > 0 ? '#059669' : '#b91c1c'
+                          color: (() => {
+                            const available = realTimeAvailability?.availableSlots ?? station.capacity?.availableSlots ?? 0;
+                            return available > 0 ? '#059669' : '#b91c1c';
+                          })()
                         }}>
                           Available Now
                         </Typography>
@@ -702,13 +816,10 @@ const StationDetails = () => {
                     mb: 1,
                     textShadow: '0 2px 4px rgba(14, 165, 233, 0.2)'
                   }}>
-                    ₹{station.pricing?.basePrice ?? 0}
+                    ₹{station.pricing?.pricePerMinute ?? station.pricing?.basePrice ?? 0}
                   </Typography>
                   <Typography variant="body1" color="#0369a1" sx={{ fontWeight: 600 }}>
-                    per kWh
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    {station.pricing?.model?.replace('_', ' ').toUpperCase() || 'Per kWh'} pricing
+                    per minute
                   </Typography>
                 </Box>
 
@@ -745,10 +856,7 @@ const StationDetails = () => {
                   <Button
                     variant="outlined"
                     startIcon={<DirectionsIcon />}
-                    onClick={() => {
-                      const url = `https://www.google.com/maps/dir/?api=1&destination=${station.location?.coordinates?.latitude},${station.location?.coordinates?.longitude}`;
-                      window.open(url, '_blank');
-                    }}
+                    onClick={() => setDirectionsDialog(true)}
                     fullWidth
                     sx={{
                       borderRadius: 3,
@@ -1021,6 +1129,30 @@ const StationDetails = () => {
                 />
               </Grid>
               
+              {/* estimated Total */}
+              <Grid item xs={12}>
+                <Box sx={{ mt: 0.5, p: 2, borderRadius: 2, bgcolor: '#f0f9ff', border: '1px solid #0ea5e9' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontWeight: 500 }}>
+                    estimated Total
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#0ea5e9' }}>
+                    {(() => {
+                      const ppm = Number(station?.pricing?.pricePerMinute ?? station?.pricing?.basePrice ?? 0);
+                      const mins = Math.round((Number(bookingForm.duration || 0)) * 60);
+                      const total = ppm * (Number.isFinite(mins) ? mins : 0);
+                      return `₹${(Number.isFinite(total) ? total : 0).toFixed(2)}`;
+                    })()}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {(() => {
+                      const ppm = Number(station?.pricing?.pricePerMinute ?? station?.pricing?.basePrice ?? 0);
+                      const mins = Math.round((Number(bookingForm.duration || 0)) * 60);
+                      return `₹${ppm}/minute × ${mins} minutes`;
+                    })()}
+                  </Typography>
+                </Box>
+              </Grid>
+              
               <Grid item xs={12}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'text.secondary' }}>
                   Vehicle Selection (for charging optimization)
@@ -1033,7 +1165,7 @@ const StationDetails = () => {
                   <Select
                     value={bookingForm.selectedVehicleIndex}
                     onChange={(e) => setBookingForm({
-                      ...bookingForm, 
+                      ...bookingForm,
                       selectedVehicleIndex: e.target.value
                     })}
                     label="Select Your Vehicle"
@@ -1082,7 +1214,7 @@ const StationDetails = () => {
               variant="contained" 
               disabled={bookingLoading}
             >
-              {bookingLoading ? 'Booking...' : 'Book Now'}
+              {bookingLoading ? 'Processing...' : 'Pay & Book Now'}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1100,6 +1232,17 @@ const StationDetails = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
+        
+        {/* Google Maps Directions Dialog */}
+        <GoogleMapsDirections
+          open={directionsDialog}
+          onClose={() => setDirectionsDialog(false)}
+          destination={station ? {
+            lat: station.location?.coordinates?.latitude,
+            lng: station.location?.coordinates?.longitude
+          } : null}
+          stationName={station?.name}
+        />
         </Container>
         <Footer />
       </Box>

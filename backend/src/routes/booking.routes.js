@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.js';
-import {
-  createBooking,
-  getUserBookings,
-  getBookingById,
-  cancelBooking,
+import { 
+  createBooking, 
+  getUserBookings, 
+  cancelBooking, 
+  updateBooking,
   getStationBookings,
-  updateBooking
+  completeBooking,
+  extendBooking
 } from '../controllers/booking.controller.js';
 
 const router = Router();
@@ -17,9 +18,10 @@ router.use(requireAuth);
 // User booking routes
 router.post('/', createBooking);
 router.get('/my-bookings', getUserBookings);
-router.get('/:bookingId', getBookingById);
 router.patch('/:bookingId/cancel', cancelBooking);
 router.patch('/:bookingId', updateBooking);
+router.patch('/:bookingId/complete', completeBooking);
+router.patch('/:bookingId/extend', extendBooking);
 
 // Station booking routes (for managers/owners)
 router.get('/station/:stationId', getStationBookings);

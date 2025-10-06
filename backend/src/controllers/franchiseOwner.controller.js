@@ -60,9 +60,12 @@ export const getDashboardData = async (req, res) => {
     // Get stations for this franchise
     const stations = await Station.find({ franchiseId: franchiseId });
     
-    // Get recent bookings
+    // Compute station IDs once
+    const stationIds = stations.map(s => s._id);
+
+    // Get recent bookings (latest 10)
     const recentBookings = await Booking.find({ 
-      stationId: { $in: stations.map(s => s._id) } 
+      stationId: { $in: stationIds } 
     })
     .populate('stationId', 'name location')
     .populate('userId', 'personalInfo.firstName personalInfo.lastName')
@@ -72,33 +75,86 @@ export const getDashboardData = async (req, res) => {
     // Calculate metrics
     const totalStations = stations.length;
     const activeStations = stations.filter(s => s.status === 'active').length;
-    const totalRevenue = recentBookings.reduce((sum, booking) => sum + (booking.totalAmount || 0), 0);
     const uptime = totalStations > 0 ? (activeStations / totalStations) * 100 : 0;
 
-    // Generate sample data for charts (in real app, this would come from actual data)
-    const usageTrends = [
-      { day: 'Mon', sessions: 45, revenue: 2500 },
-      { day: 'Tue', sessions: 52, revenue: 2800 },
-      { day: 'Wed', sessions: 38, revenue: 2100 },
-      { day: 'Thu', sessions: 61, revenue: 3200 },
-      { day: 'Fri', sessions: 48, revenue: 2600 },
-      { day: 'Sat', sessions: 55, revenue: 2900 },
-      { day: 'Sun', sessions: 42, revenue: 2300 }
-    ];
+    // Compute monthly revenue (current calendar month, completed payments only)
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = now; // up to now
+    const monthBookings = await Booking.find({
+      stationId: { $in: stationIds },
+      'payment.paymentStatus': 'completed',
+      $or: [
+        { 'payment.paymentDate': { $gte: monthStart, $lte: monthEnd } },
+        { 'payment.paymentDate': { $exists: false } } // fallback to createdAt window below via code
+      ]
+    }).select('payment pricing createdAt');
+    const monthlyRevenue = monthBookings.reduce((sum, b) => {
+      const inMonthByCreated = b.createdAt >= monthStart && b.createdAt <= monthEnd;
+      const paidDate = b.payment?.paymentDate;
+      const inMonth = paidDate ? (paidDate >= monthStart && paidDate <= monthEnd) : inMonthByCreated;
+      if (!inMonth) return sum;
+      const paid = b.payment?.paidAmount ?? 0;
+      const fallback = b.pricing?.actualCost ?? 0;
+      return sum + (paid || fallback || 0);
+    }, 0);
 
+    // Generate real usage trends data for last 7 days
+    const last7Days = [];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayStart = new Date(date.setHours(0, 0, 0, 0));
+      const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+      
+      const dayBookings = await Booking.find({
+        stationId: { $in: stationIds },
+        createdAt: { $gte: dayStart, $lte: dayEnd }
+      });
+      
+      const sessions = dayBookings.length;
+      const revenue = dayBookings.reduce((sum, booking) => sum + (booking.payment?.paidAmount || booking.totalAmount || 0), 0);
+      
+      last7Days.push({
+        day: dayNames[date.getDay()],
+        sessions,
+        revenue: Math.round(revenue)
+      });
+    }
+
+    // Real station performance data
     const stationPerformance = [
-      { name: 'Active', value: activeStations },
-      { name: 'Maintenance', value: stations.filter(s => s.status === 'maintenance').length },
-      { name: 'Offline', value: stations.filter(s => s.status === 'offline').length }
+      { name: 'Active', value: stations.filter(s => (s.operational?.status || s.status) === 'active').length },
+      { name: 'Maintenance', value: stations.filter(s => (s.operational?.status || s.status) === 'maintenance').length },
+      { name: 'Inactive', value: stations.filter(s => (s.operational?.status || s.status) === 'inactive').length }
     ];
 
-    const revenueAnalysis = [
-      { date: '2025-01-01', revenue: 15000 },
-      { date: '2025-01-02', revenue: 18000 },
-      { date: '2025-01-03', revenue: 12000 },
-      { date: '2025-01-04', revenue: 20000 },
-      { date: '2025-01-05', revenue: 16000 }
-    ];
+    // Generate real revenue analysis for last 30 days
+    const last30Days = [];
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayStart = new Date(date.setHours(0, 0, 0, 0));
+      const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+      
+      const dayBookings = await Booking.find({
+        stationId: { $in: stationIds },
+        createdAt: { $gte: dayStart, $lte: dayEnd },
+        'payment.paymentStatus': 'completed'
+      });
+      
+      const revenue = dayBookings.reduce((sum, booking) => sum + (booking.payment?.paidAmount || 0), 0);
+      
+      // Only include days with data to avoid cluttering the chart
+      if (i < 5 || revenue > 0) {
+        last30Days.push({
+          date: date.toISOString().split('T')[0],
+          revenue: Math.round(revenue)
+        });
+      }
+    }
 
     // Sample recent activity
     const recentActivity = recentBookings.map(booking => ({
@@ -185,14 +241,14 @@ export const getDashboardData = async (req, res) => {
         },
         totalStations,
         activeSessions: recentBookings.filter(b => b.status === 'active').length,
-        monthlyRevenue: totalRevenue,
+        monthlyRevenue,
         uptime: Math.round(uptime),
-        energyDelivered: 1250, // Sample data
-        avgSessionDuration: 45, // Sample data
-        customerSatisfaction: 92, // Sample data
-        usageTrends,
+        energyDelivered: Math.round(recentBookings.reduce((sum, b) => sum + (b.energyConsumed || 0), 0)),
+        avgSessionDuration: recentBookings.length > 0 ? Math.round(recentBookings.reduce((sum, b) => sum + (b.duration || 0), 0) / recentBookings.length) : 0,
+        customerSatisfaction: 92, // This would come from ratings/feedback system
+        usageTrends: last7Days,
         stationPerformance,
-        revenueAnalysis,
+        revenueAnalysis: last30Days,
         recentActivity,
         stations: stationsData,
         stationManagers,
@@ -352,8 +408,7 @@ export const addStation = async (req, res) => {
       chargerTypes,
       maxPowerPerCharger,
       totalPowerCapacity,
-      pricingModel = 'per_kwh',
-      basePrice,
+      pricePerMinute,
       cancellationPolicy,
       status = 'active',
       parkingSlots,
@@ -416,10 +471,10 @@ export const addStation = async (req, res) => {
         message: 'Max power per charger must be between 1 and 500 kW'
       });
     }
-    if (!basePrice || basePrice < 1 || basePrice > 5000) {
+    if (!pricePerMinute || pricePerMinute < 1 || pricePerMinute > 5000) {
       return res.status(400).json({
         success: false,
-        message: 'Base price must be between 1 and 5000'
+        message: 'Price per minute must be between 1 and 5000'
       });
     }
     if (parkingSlots == null || parkingSlots < 0 || parkingSlots > 30) {
@@ -472,8 +527,7 @@ export const addStation = async (req, res) => {
         totalPowerCapacity: parseFloat(totalPowerCapacity) || (parseInt(totalChargers) * parseFloat(maxPowerPerCharger))
       },
       pricing: {
-        model: pricingModel,
-        basePrice: Math.min(5000, Math.max(1, parseFloat(basePrice))),
+        pricePerMinute: Math.min(5000, Math.max(1, parseFloat(pricePerMinute))),
         cancellationPolicy: cancellationPolicy?.trim() || ''
       },
       operational: {
@@ -502,6 +556,20 @@ export const addStation = async (req, res) => {
     };
 
     const station = await Station.create(stationData);
+
+    // Add station to manager's assigned stations if manager was assigned
+    if (managerId) {
+      console.log('Adding new station to manager assigned stations:', {
+        stationId: station._id,
+        managerId,
+        managerEmail
+      });
+      
+      const User = (await import('../models/user.model.js')).default;
+      await User.findByIdAndUpdate(managerId, {
+        $addToSet: { 'roleSpecificData.stationManagerInfo.assignedStations': station._id }
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -577,8 +645,7 @@ export const updateStation = async (req, res) => {
       chargerTypes,
       maxPowerPerCharger,
       totalPowerCapacity,
-      pricingModel,
-      basePrice,
+      pricePerMinute,
       cancellationPolicy,
       status,
       parkingSlots,
@@ -644,14 +711,12 @@ export const updateStation = async (req, res) => {
       }
     }
 
-    // Update pricing
-    if (pricingModel || basePrice !== undefined || cancellationPolicy !== undefined) {
-      updateData.pricing = {
-        ...station.pricing,
-        ...(pricingModel && { model: pricingModel }),
-        ...(basePrice !== undefined && { basePrice: parseFloat(basePrice) }),
-        ...(cancellationPolicy !== undefined && { cancellationPolicy: cancellationPolicy?.trim() || '' })
-      };
+    // Update pricing (only per-minute supported)
+    if (pricePerMinute !== undefined || cancellationPolicy !== undefined) {
+      const pricingUpdate = { ...station.pricing };
+      if (pricePerMinute !== undefined) pricingUpdate.pricePerMinute = Math.min(5000, Math.max(1, parseFloat(pricePerMinute)));
+      if (cancellationPolicy !== undefined) pricingUpdate.cancellationPolicy = cancellationPolicy?.trim() || '';
+      updateData.pricing = pricingUpdate;
     }
 
     // Update operational details
@@ -671,6 +736,11 @@ export const updateStation = async (req, res) => {
           }
         })
       };
+      
+      // Also update the main status field for consistency
+      if (status) {
+        updateData.status = status;
+      }
     }
 
     // Update contact info
@@ -684,13 +754,15 @@ export const updateStation = async (req, res) => {
     }
 
     // Update manager if email provided
+    let newManagerId = null;
     if (managerEmail?.trim()) {
       const User = (await import('../models/user.model.js')).default;
       const manager = await User.findOne({ 
         'personalInfo.email': managerEmail.toLowerCase().trim(),
         role: 'station_manager'
       });
-      updateData.managerId = manager ? manager._id : null;
+      newManagerId = manager ? manager._id : null;
+      updateData.managerId = newManagerId;
     }
 
     // Update amenities and images
@@ -699,6 +771,33 @@ export const updateStation = async (req, res) => {
     }
     if (images !== undefined) {
       updateData.images = Array.isArray(images) ? images.filter(i => i?.trim()) : [];
+    }
+
+    // Handle manager assignment changes
+    if (managerEmail !== undefined) {
+      const User = (await import('../models/user.model.js')).default;
+      console.log('Updating station manager assignment:', {
+        stationId,
+        previousManagerId: station.managerId,
+        newManagerId,
+        managerEmail
+      });
+      
+      // Remove station from previous manager's assigned stations if any
+      if (station.managerId) {
+        console.log('Removing station from previous manager:', station.managerId);
+        await User.findByIdAndUpdate(station.managerId, {
+          $pull: { 'roleSpecificData.stationManagerInfo.assignedStations': stationId }
+        });
+      }
+      
+      // Add station to new manager's assigned stations if assigned
+      if (newManagerId) {
+        console.log('Adding station to new manager:', newManagerId);
+        await User.findByIdAndUpdate(newManagerId, {
+          $addToSet: { 'roleSpecificData.stationManagerInfo.assignedStations': stationId }
+        });
+      }
     }
 
     const updatedStation = await Station.findByIdAndUpdate(

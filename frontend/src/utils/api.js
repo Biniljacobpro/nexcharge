@@ -176,11 +176,37 @@ export const adminOverview = async () => {
   return data;
 };
 
+export const adminLiveStats = async () => {
+  const res = await authFetch(`${API_BASE}/admin/stats/live`, { cache: 'no-store' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to load live stats');
+  return data.data || { 
+    activeStations: 0, 
+    totalRevenue: 0, 
+    totalPayments: 0, 
+    liveChargingSessions: 0,
+    monthlyRevenue: 0,
+    weeklyRevenue: 0,
+    dailyRevenueChart: []
+  };
+};
+
 export const adminUsers = async () => {
   const res = await authFetch(`${API_BASE}/admin/users`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to load users');
   return data.users;
+};
+
+export const adminUpdateUserStatus = async (id, isActive) => {
+  const res = await authFetch(`${API_BASE}/admin/users/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isActive })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to update user status');
+  return data;
 };
 
 // Corporate Applications API

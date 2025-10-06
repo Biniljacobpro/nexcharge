@@ -115,6 +115,10 @@ const CorporateDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [franchises, setFranchises] = useState([]);
   const [deleteFranchiseDlg, setDeleteFranchiseDlg] = useState({ open: false, franchise: null, status: 'idle', error: '' });
+  const [users, setUsers] = useState([]);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('');
+  const [updatingUserId, setUpdatingUserId] = useState(null);
 
   // State for data
   const [dashboardData, setDashboardData] = useState({
@@ -169,6 +173,7 @@ const CorporateDashboard = () => {
     { id: 'dashboard', label: 'Main Dashboard', icon: <DashboardIcon />, description: 'Overview and KPIs' },
     { id: 'franchises', label: 'Franchise Management', icon: <BusinessIcon />, description: 'Manage franchise partners' },
     { id: 'stations', label: 'Station Management', icon: <ChargingStationIcon />, description: 'Monitor charging stations' },
+    { id: 'users', label: 'User Management', icon: <PeopleIcon />, description: 'Manage franchise owners and station managers' },
     { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon />, description: 'Performance insights' },
     { id: 'bookings', label: 'Booking Management', icon: <ScheduleIcon />, description: 'Track charging sessions' },
     { id: 'profile', label: 'Profile Settings', icon: <PersonIcon />, description: 'Account management' },
@@ -184,6 +189,7 @@ const CorporateDashboard = () => {
     loadCorporateStations();
     loadUserProfile();
     loadCorporateInfo();
+    loadUsers();
   }, []);
 
   const loadUserProfile = async () => {
@@ -275,6 +281,18 @@ const CorporateDashboard = () => {
       setSnackbar({ open: true, message: 'Error loading corporate info', severity: 'error' });
     } finally {
       setCorpInfoLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const response = await corporateService.getCorporateUsers();
+      if (response.success) {
+        setUsers(response.users);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setSnackbar({ open: true, message: 'Error loading users', severity: 'error' });
     }
   };
 
@@ -851,6 +869,176 @@ const CorporateDashboard = () => {
     </Box>
   );
 
+  // Handle user status toggle
+  const handleUserStatusToggle = async (userId, currentStatus) => {
+    try {
+      setUpdatingUserId(userId);
+      await corporateService.updateCorporateUserStatus(userId, !currentStatus);
+      await loadUsers(); // Refresh the users list
+      setSnackbar({ 
+        open: true, 
+        message: `User ${!currentStatus ? 'activated' : 'deactivated'} successfully`, 
+        severity: 'success' 
+      });
+    } catch (error) {
+      console.error('Failed to update user status', error);
+      setSnackbar({ 
+        open: true, 
+        message: error.message || 'Failed to update user status', 
+        severity: 'error' 
+      });
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const renderUserManagement = () => {
+    // Filter users based on search query and role filter
+    const filteredUsers = users.filter(user => {
+      const matchesSearch = !userSearchQuery || 
+        `${user.personalInfo?.firstName || ''} ${user.personalInfo?.lastName || ''}`.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        (user.personalInfo?.email || '').toLowerCase().includes(userSearchQuery.toLowerCase());
+      
+      const matchesRole = !userRoleFilter || user.role === userRoleFilter;
+      
+      return matchesSearch && matchesRole;
+    });
+
+    // Get unique roles for filter dropdown (only franchise_owner and station_manager)
+    const uniqueRoles = [...new Set(users.map(u => u.role))].filter(role => 
+      ['franchise_owner', 'station_manager'].includes(role)
+    ).sort();
+
+    return (
+      <Box>
+        <Typography variant="h5" gutterBottom>
+          User Management
+        </Typography>
+        
+        <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                All Users ({filteredUsers.length})
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  placeholder="Search users..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <SearchIcon sx={{ color: 'text.secondary' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{ width: 250 }}
+                />
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel>Role</InputLabel>
+                  <Select
+                    label="Role"
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                  >
+                    <MenuItem value="">All Roles</MenuItem>
+                    {uniqueRoles.map(role => (
+                      <MenuItem key={role} value={role}>
+                        {role === 'franchise_owner' ? 'Franchise Owner' : 'Station Manager'}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
+            
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>NAME</TableCell>
+                    <TableCell>ROLE</TableCell>
+                    <TableCell>STATUS</TableCell>
+                    <TableCell>JOINED</TableCell>
+                    <TableCell align="right">ACTIONS</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} sx={{ textAlign: 'center', py: 4 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {userSearchQuery || userRoleFilter ? 'No users found matching your search criteria' : 'No users found'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <TableRow key={user._id}>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                              {`${user.personalInfo?.firstName?.[0] || ''}${user.personalInfo?.lastName?.[0] || ''}`}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {user.personalInfo?.firstName} {user.personalInfo?.lastName}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {user.personalInfo?.email}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={user.role === 'franchise_owner' ? 'Franchise Owner' : 'Station Manager'} 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: user.role === 'franchise_owner' ? 'primary.main' : 'info.main',
+                              color: 'white'
+                            }} 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={user.credentials?.isActive ? 'Active' : 'Inactive'} 
+                            size="small" 
+                            sx={{ bgcolor: user.credentials?.isActive ? 'success.main' : 'warning.main', color: 'white' }} 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(user.createdAt).toLocaleDateString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            variant={user.credentials?.isActive ? 'outlined' : 'contained'}
+                            color={user.credentials?.isActive ? 'warning' : 'success'}
+                            disabled={updatingUserId === user._id}
+                            onClick={() => handleUserStatusToggle(user._id, user.credentials?.isActive)}
+                          >
+                            {updatingUserId === user._id ? (
+                              <CircularProgress size={16} sx={{ mr: 1 }} />
+                            ) : null}
+                            {user.credentials?.isActive ? 'Deactivate' : 'Activate'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  };
 
   const renderStationManagement = () => (
     <Box>
@@ -1523,6 +1711,7 @@ const CorporateDashboard = () => {
           {activeSection === 'dashboard' && renderOverview()}
           {activeSection === 'franchises' && renderFranchiseManagement()}
           {activeSection === 'stations' && renderStationManagement()}
+          {activeSection === 'users' && renderUserManagement()}
           {activeSection === 'analytics' && renderAnalytics()}
           {activeSection === 'bookings' && renderBookings()}
           {activeSection === 'profile' && renderProfile()}
