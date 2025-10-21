@@ -89,6 +89,7 @@ import {
 } from '@mui/icons-material';
 import { PhotoCamera as PhotoCameraIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
+import GoogleMapsLocationPicker from '../components/GoogleMapsLocationPicker';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { franchiseOwnerService } from '../services/franchiseOwnerService';
@@ -1362,7 +1363,22 @@ const FranchiseOwnerDashboard = () => {
                       value={stationForm.locationDms}
                       onChange={(e) => setStationForm({ ...stationForm, locationDms: e.target.value })}
                       disabled={stationDialog.mode === 'view'}
-                      helperText={`Enter coordinates in DMS format. Example: 9°32'41.5"N 76°49'02.8"E`}
+                      helperText={`Enter coordinates in DMS format or pick on the map below`}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <GoogleMapsLocationPicker
+                      value={{ lat: Number(stationForm.latitude) || undefined, lng: Number(stationForm.longitude) || undefined }}
+                      onChange={({ lat, lng, dms }) => {
+                        setStationForm({
+                          ...stationForm,
+                          latitude: lat,
+                          longitude: lng,
+                          locationDms: dms,
+                        });
+                      }}
+                      initialCenter={{ lat: 9.9312, lng: 76.2673 }}
+                      height={280}
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -1437,11 +1453,16 @@ const FranchiseOwnerDashboard = () => {
                         disabled={stationDialog.mode === 'view'}
                         renderValue={(selected) => selected.join(', ')}
                       >
-                        <SelectMenuItem value="ac_type2">AC Type 2</SelectMenuItem>
-                        <SelectMenuItem value="dc_ccs">DC Fast Charger (CCS)</SelectMenuItem>
-                        <SelectMenuItem value="dc_chademo">DC Fast Charger (CHAdeMO)</SelectMenuItem>
-                        <SelectMenuItem value="dc_gbt">DC Fast Charger (GB/T)</SelectMenuItem>
-                        <SelectMenuItem value="ac_3pin">3-pin Slow Charging</SelectMenuItem>
+                        <SelectMenuItem value="type1">Type 1 (SAE J1772)</SelectMenuItem>
+                        <SelectMenuItem value="type2">Type 2 (IEC Type 2)</SelectMenuItem>
+                        <SelectMenuItem value="bharat_ac_001">Bharat AC-001</SelectMenuItem>
+                        <SelectMenuItem value="bharat_dc_001">Bharat DC-001</SelectMenuItem>
+                        <SelectMenuItem value="ccs2">CCS-2</SelectMenuItem>
+                        <SelectMenuItem value="chademo">CHAdeMO</SelectMenuItem>
+                        <SelectMenuItem value="gbt_type6">GB/T Type-6</SelectMenuItem>
+                        <SelectMenuItem value="type7_leccs">Type-7 (LECCS)</SelectMenuItem>
+                        <SelectMenuItem value="mcs">Megawatt Charging System (MCS)</SelectMenuItem>
+                        <SelectMenuItem value="chaoji">ChaoJi</SelectMenuItem>
                       </Select>
                     </FormControl>
                   </Grid>

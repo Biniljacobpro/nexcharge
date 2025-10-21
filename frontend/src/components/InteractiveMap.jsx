@@ -171,22 +171,38 @@ const InteractiveMap = ({ compact = false, height }) => {
                     <p style="margin: 4px 0; color: #6b7280;">
                       <strong>Price:</strong> ₹${station.pricePerMinute}/minute
                     </p>
-                    <button
-                      onclick="window.dispatchEvent(new CustomEvent('navigateToStation', { detail: '${station.id}' }))"
-                      style="
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        border: none;
-                        padding: 8px 16px;
-                        border-radius: 6px;
-                        cursor: pointer;
-                        font-weight: 500;
-                        margin-top: 8px;
-                        width: 100%;
-                      "
-                    >
-                      View Details
-                    </button>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                      <button
+                        onclick="window.dispatchEvent(new CustomEvent('navigateToStation', { detail: '${station.id}' }))"
+                        style="
+                          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                          color: white;
+                          border: none;
+                          padding: 8px 16px;
+                          border-radius: 6px;
+                          cursor: pointer;
+                          font-weight: 500;
+                          flex: 1;
+                        "
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onclick="window.location.href='/stations/${station.id}'"
+                        style="
+                          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                          color: white;
+                          border: none;
+                          padding: 8px 16px;
+                          border-radius: 6px;
+                          cursor: pointer;
+                          font-weight: 500;
+                          flex: 1;
+                        "
+                      >
+                        Book Now
+                      </button>
+                    </div>
                   </div>
                 `);
 
@@ -396,8 +412,8 @@ const InteractiveMap = ({ compact = false, height }) => {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
               {filteredStations.map((station, index) => (
                 <motion.div key={station.id || `station-${index}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: index * 0.1 }}>
-                  <Paper elevation={2} sx={{ p: 3, borderRadius: 2, minWidth: 280, border: '1px solid #e5e7eb', position: 'relative', cursor: 'pointer', '&:hover': { transform: 'translateY(-2px)', transition: 'transform 0.2s ease', boxShadow: '0 8px 25px rgba(0,0,0,0.1)' } }} onClick={() => navigate(`/stations/${station.id}`)}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Paper elevation={2} sx={{ p: 3, pb: 2, borderRadius: 2, width: 320, height: 260, display: 'flex', flexDirection: 'column', border: '1px solid #e5e7eb', position: 'relative', cursor: 'pointer', '&:hover': { transform: 'translateY(-2px)', transition: 'transform 0.2s ease', boxShadow: '0 8px 25px rgba(0,0,0,0.1)' } }} onClick={() => navigate(`/stations/${station.id}`)}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
                         <Typography variant="h6" sx={{ fontWeight: 600, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {station.name}
@@ -412,19 +428,81 @@ const InteractiveMap = ({ compact = false, height }) => {
                         <DirectionsIcon />
                       </IconButton>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                      <Chip label={station.type} size="small" sx={{ backgroundColor: '#dbeafe', color: '#1e40af', fontWeight: 600 }} />
-                      {station.status === 'maintenance' ? null : (
-                        <Chip label={`⚡ ${station.available}/${station.total} available`} size="small" color={station.available > 0 ? 'success' : 'error'} variant={station.available > 0 ? 'outlined' : 'filled'} sx={{ fontWeight: 700 }} />
-                      )}
-                      <Chip label={`₹${station.pricePerMinute}/minute`} size="small" sx={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 600 }} />
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 2 }}>
-                      ⭐ {station.rating}/5 • {(station.amenities && station.amenities.length > 0) ? station.amenities.join(', ') : 'No amenities listed'}
+                    {(() => {
+                      const typeMap = {
+                        'type1': 'Type 1',
+                        'type2': 'Type 2',
+                        'bharat_ac_001': 'Bharat AC',
+                        'bharat_dc_001': 'Bharat DC',
+                        'ccs2': 'CCS-2',
+                        'chademo': 'CHAdeMO',
+                        'gbt_type6': 'GB/T',
+                        'type7_leccs': 'Type-7',
+                        'mcs': 'MCS',
+                        'chaoji': 'ChaoJi'
+                      };
+                      const friendlyType = typeMap[String(station.type || '').toLowerCase()] || 'Various';
+                      const priceStr = `₹${Number(station.pricePerMinute || 0).toFixed(2)}/min`;
+                      const available = Number(station.available || 0);
+                      const total = Number(station.total || 0);
+                      const hasSpots = available > 0 && station.status !== 'maintenance';
+                      return (
+                        <>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                            <Chip label={friendlyType} size="small" sx={{ backgroundColor: '#eef2ff', color: '#3730a3', fontWeight: 600 }} />
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#065f46' }}>{priceStr}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                            {station.status === 'maintenance' ? (
+                              <Chip label="Under maintenance" size="small" color="warning" variant="outlined" />
+                            ) : hasSpots ? (
+                              <Chip label="Available now" size="small" color="success" variant="outlined" />
+                            ) : (
+                              <Chip label="Currently full" size="small" color="error" variant="outlined" />
+                            )}
+                            {total > 0 && (
+                              <Typography variant="caption" color="text.secondary">{available}/{total} free</Typography>
+                            )}
+                          </Box>
+                        </>
+                      );
+                    })()}
+                    {(() => {
+                      const amenities = Array.isArray(station.amenities) ? station.amenities : [];
+                      if (amenities.length === 0) return null;
+                      const show = amenities.slice(0, 2).join(', ');
+                      return (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem', mt: 1 }}>
+                          Amenities: {show}{amenities.length > 2 ? ' +' : ''}
+                        </Typography>
+                      );
+                    })()}
+                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem', mt: 0.5 }}>
+                      ⭐ {station.rating}/5
                     </Typography>
-                    <Typography variant="body2" sx={{ fontSize: '0.9rem', fontWeight: 600, color: station.status === 'maintenance' ? '#b45309' : (station.available > 0 ? '#166534' : '#b91c1c') }}>
-                      {station.status === 'maintenance' ? '🚧 Under maintenance' : (station.available > 0 ? '✅ Ready for charging' : '⛔ Currently full - check back later')}
-                    </Typography>
+                    <Button 
+                      variant="contained" 
+                      fullWidth 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        navigate(`/stations/${station.id}`); 
+                      }}
+                      disabled={station.status === 'maintenance'}
+                      sx={{ 
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        mt: 'auto',
+                        mb: 0.5,
+                        '&:hover': { 
+                          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                          transform: 'translateY(-1px)'
+                        },
+                        '&:disabled': {
+                          background: '#9ca3af'
+                        }
+                      }}
+                    >
+                      {station.status === 'maintenance' ? '🚧 Under Maintenance' : '⚡ Book now'}
+                    </Button>
                   </Paper>
                 </motion.div>
               ))}
