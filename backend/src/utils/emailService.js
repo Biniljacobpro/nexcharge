@@ -503,3 +503,96 @@ export const sendPasswordResetOtpEmail = async ({ recipientEmail, recipientName,
   }
 };
 
+// Booking confirmation email
+export const sendBookingConfirmationEmail = async (booking, user, station) => {
+  try {
+    const transporter = await createTransporter();
+    
+    // Format dates for display
+    const startTime = new Date(booking.startTime);
+    const endTime = new Date(booking.endTime);
+    const formattedStartTime = startTime.toLocaleString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const formattedEndTime = endTime.toLocaleString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    const duration = Math.round((endTime - startTime) / (1000 * 60)); // minutes
+    const estimatedCost = booking.pricing?.estimatedCost || 0;
+
+    const mailOptions = {
+      from: `"NexCharge Team" <${process.env.EMAIL_USER || process.env.email_id}>`,
+      to: user.personalInfo.email,
+      subject: '✅ Booking Confirmed - Your Charging Session is Set!',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa;">
+          <div style="background: linear-gradient(135deg, #00b894, #00a085); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">✅ Booking Confirmed!</h1>
+            <p style="color: white; margin: 10px 0 0 0; font-size: 16px;">Your EV Charging Session is Ready</p>
+          </div>
+          
+          <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #2d3436; margin-top: 0;">Hello ${user.personalInfo.firstName} ${user.personalInfo.lastName}!</h2>
+            
+            <p style="color: #636e72; line-height: 1.6; font-size: 16px;">
+              Your booking at <strong>${station.name}</strong> has been successfully confirmed.
+            </p>
+            
+            <div style="background-color: #e8f5e8; border-left: 4px solid #00b894; padding: 20px; margin: 25px 0; border-radius: 5px;">
+              <h3 style="color: #2d3436; margin-top: 0;">📅 Booking Details</h3>
+              <p style="margin: 10px 0;"><strong>Station:</strong> ${station.name}</p>
+              <p style="margin: 10px 0;"><strong>Date & Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
+              <p style="margin: 10px 0;"><strong>Duration:</strong> ${duration} minutes</p>
+              <p style="margin: 10px 0;"><strong>Charger Type:</strong> ${booking.chargerType}</p>
+              <p style="margin: 10px 0;"><strong>Estimated Cost:</strong> ₹${estimatedCost.toFixed(2)}</p>
+              <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${booking._id}</p>
+            </div>
+            
+            <div style="background-color: #fff8e1; border-left: 4px solid #ffc107; padding: 20px; margin: 25px 0; border-radius: 5px;">
+              <h3 style="color: #2d3436; margin-top: 0;">💡 Important Information</h3>
+              <ul style="color: #636e72; line-height: 1.8; padding-left: 20px;">
+                <li>Please arrive at the station at least 5 minutes before your scheduled time</li>
+                <li>Bring your EV and charging cable</li>
+                <li>Your booking will be automatically cancelled if you don't start charging within 15 minutes of the scheduled start time</li>
+                <li>You'll receive a reminder notification 5 minutes before your session starts</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/bookings" 
+                 style="background: linear-gradient(135deg, #00b894, #00a085); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; box-shadow: 0 4px 15px rgba(0,184,148,0.3);">
+                📋 View Your Booking
+              </a>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e9ecef;">
+              <p style="color: #636e72; font-size: 14px; text-align: center;">
+                Need help? Contact our support team at 
+                <a href="mailto:support@nexcharge.com" style="color: #00b894;">support@nexcharge.com</a>
+              </p>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 20px; color: #636e72; font-size: 12px;">
+            <p>© 2025 NexCharge. All rights reserved.</p>
+            <p>Powering the Future of EV Charging</p>
+          </div>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Booking confirmation email sent successfully:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('Error sending booking confirmation email:', error);
+    return false;
+  }
+};

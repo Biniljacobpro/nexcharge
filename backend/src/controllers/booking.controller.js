@@ -2,6 +2,7 @@ import Booking from '../models/booking.model.js';
 import Station from '../models/station.model.js';
 import User from '../models/user.model.js';
 import { createBookingNotification } from './notification.controller.js';
+import { sendBookingConfirmationEmail } from '../utils/emailService.js';
 
 // Create a new booking
 export const createBooking = async (req, res) => {
@@ -139,11 +140,12 @@ export const createBooking = async (req, res) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
     const now = new Date();
+    const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000);
 
-    if (start <= now) {
+    if (start < tenMinutesFromNow) {
       return res.status(400).json({
         success: false,
-        message: 'Start time must be in the future'
+        message: 'Start time must be at least 10 minutes from now'
       });
     }
 
@@ -318,6 +320,22 @@ export const createBooking = async (req, res) => {
       ]);
     } catch (_) {}
 
+    // Send booking confirmation email
+    try {
+      await sendBookingConfirmationEmail(booking, booking.userId, booking.stationId);
+    } catch (emailError) {
+      console.error('Error sending booking confirmation email:', emailError);
+      // Don't fail the booking if email fails
+    }
+
+    // Create booking confirmation notification
+    try {
+      await createBookingNotification(userId, 'booking_confirmed', booking, station);
+    } catch (notificationError) {
+      console.error('Error creating booking confirmation notification:', notificationError);
+      // Don't fail the booking if notification fails
+    }
+
     res.status(201).json({
       success: true,
       message: 'Booking created successfully',
@@ -360,8 +378,9 @@ export const updateBooking = async (req, res) => {
     if (!(newStart instanceof Date) || isNaN(newStart) || !(newEnd instanceof Date) || isNaN(newEnd)) {
       return res.status(400).json({ success: false, message: 'Invalid start or end time' });
     }
-    if (newStart <= now) {
-      return res.status(400).json({ success: false, message: 'Start time must be in the future' });
+    const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000);
+    if (newStart < tenMinutesFromNow) {
+      return res.status(400).json({ success: false, message: 'Start time must be at least 10 minutes from now' });
     }
     if (newEnd <= newStart) {
       return res.status(400).json({ success: false, message: 'End time must be after start time' });

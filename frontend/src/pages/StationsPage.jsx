@@ -157,6 +157,28 @@ const StationsPage = () => {
                         {statusText}
                       </Typography>
                     )}
+                    <Button 
+                      variant="contained" 
+                      size="small"
+                      fullWidth 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        navigate(`/stations/${s._id}`); 
+                      }}
+                      disabled={isMaintenance}
+                      sx={{ 
+                        mt: 1,
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        '&:hover': { 
+                          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                        },
+                        '&:disabled': {
+                          background: '#9ca3af'
+                        }
+                      }}
+                    >
+                      {isMaintenance ? '🚧 Under Maintenance' : '⚡ Book Now'}
+                    </Button>
                   </CardContent>
                 </Card>
               </Grid>

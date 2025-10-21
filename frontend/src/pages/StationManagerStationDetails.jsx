@@ -26,7 +26,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import stationManagerService from '../services/stationManagerService';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-const CHARGER_TYPES = ['ac_type2', 'dc_ccs', 'dc_chademo', 'dc_gbt', 'ac_3pin'];
+const CHARGER_TYPES = ['type1', 'type2', 'bharat_ac_001', 'bharat_dc_001', 'ccs2', 'chademo', 'gbt_type6', 'type7_leccs', 'mcs', 'chaoji'];
 const PRICING_MODELS = ['per_kwh', 'per_minute', 'flat_fee', 'dynamic'];
 
 const StationManagerStationDetails = () => {

@@ -20,7 +20,8 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  MenuItem
+  MenuItem,
+  Autocomplete
 } from '@mui/material';
 import {
   DirectionsCar as CarIcon,
@@ -46,15 +47,27 @@ const UserHomePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
+  const [requestVehicleDialogOpen, setRequestVehicleDialogOpen] = useState(false);
   const [vehicleForm, setVehicleForm] = useState({ make: '', model: '', year: '', batteryCapacity: '', preferredChargingType: 'fast' });
+  const [requestVehicleForm, setRequestVehicleForm] = useState({ make: '', model: '' });
   const [modelsForMake, setModelsForMake] = useState([]);
   const [makes, setMakes] = useState([]);
   const [capacitiesForModel, setCapacitiesForModel] = useState([]);
   const [capacityError, setCapacityError] = useState('');
   const [yearError, setYearError] = useState('');
   const [duplicateError, setDuplicateError] = useState('');
+  const [requestVehicleError, setRequestVehicleError] = useState('');
+  const [requestVehicleSuccess, setRequestVehicleSuccess] = useState('');
   const [myVehicles, setMyVehicles] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
+  
+  // Vehicle makes for autocomplete (same as in admin module)
+  const vehicleMakes = [
+    'Tata', 'MG', 'Hyundai', 'BYD', 'Mahindra', 'Kia', 'Volkswagen',
+    'Tesla', 'Renault', 'VinFast', 'Ather', 'Ola', 'TVS', 'Bajaj',
+    'Hero Electric', 'Revolt', 'Okinawa', 'Ampere', 'Oben', 'PureEV',
+    'Vespa', 'Piaggio', 'Olectra/Volvo'
+  ];
   const [myBookings, setMyBookings] = useState([]);
   const [vehiclesLoading, setVehiclesLoading] = useState(true);
   const [bookingsLoading, setBookingsLoading] = useState(true);
@@ -109,6 +122,11 @@ const UserHomePage = () => {
         // If redirected here to add a vehicle from StationDetails
         const flag = localStorage.getItem('openAddVehicle');
         if (flag === '1') {
+          setEditIndex(null);
+          setVehicleForm({ make: '', model: '', year: '', batteryCapacity: '', preferredChargingType: 'fast' });
+          setCapacityError('');
+          setYearError('');
+          setDuplicateError('');
           setVehicleDialogOpen(true);
           localStorage.removeItem('openAddVehicle');
         }
@@ -134,6 +152,38 @@ const UserHomePage = () => {
       } catch { setMakes([]); }
     })();
   }, [vehicleDialogOpen]);
+
+  // Load models when make changes
+  useEffect(() => {
+    if (!vehicleForm.make) {
+      setModelsForMake([]);
+      return;
+    }
+    (async () => {
+      try {
+        const models = await getModelsByMakeApi(vehicleForm.make);
+        setModelsForMake(models);
+      } catch { 
+        setModelsForMake([]); 
+      }
+    })();
+  }, [vehicleForm.make]);
+
+  // Load capacities when make and model change
+  useEffect(() => {
+    if (!vehicleForm.make || !vehicleForm.model) {
+      setCapacitiesForModel([]);
+      return;
+    }
+    (async () => {
+      try {
+        const caps = await getCapacitiesByMakeModelApi(vehicleForm.make, vehicleForm.model);
+        setCapacitiesForModel(caps);
+      } catch { 
+        setCapacitiesForModel([]); 
+      }
+    })();
+  }, [vehicleForm.make, vehicleForm.model]);
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -286,7 +336,14 @@ const UserHomePage = () => {
                   </Grid>
 
                   <Grid item xs={12} sm={6} md={3}>
-                    <Card onClick={() => setVehicleDialogOpen(true)} sx={{ height: '100%', borderRadius: 3, boxShadow: '0 6px 24px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 10px 28px rgba(0,0,0,0.12)' } }}>
+                    <Card onClick={() => {
+                      setEditIndex(null);
+                      setVehicleForm({ make: '', model: '', year: '', batteryCapacity: '', preferredChargingType: 'fast' });
+                      setCapacityError('');
+                      setYearError('');
+                      setDuplicateError('');
+                      setVehicleDialogOpen(true);
+                    }} sx={{ height: '100%', borderRadius: 3, boxShadow: '0 6px 24px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 10px 28px rgba(0,0,0,0.12)' } }}>
                       <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', p: 3, minHeight: 150 }}>
                         <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
                           <CarIcon sx={{ fontSize: 40, color: 'success.main' }} />
@@ -317,7 +374,7 @@ const UserHomePage = () => {
                   </Grid>
 
                   <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ height: '100%', borderRadius: 3, boxShadow: '0 6px 24px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 10px 28px rgba(0,0,0,0.12)' } }}>
+                    <Card onClick={() => navigate('/payments')} sx={{ height: '100%', borderRadius: 3, boxShadow: '0 6px 24px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 10px 28px rgba(0,0,0,0.12)' } }}>
                       <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', p: 3, minHeight: 150 }}>
                         <PaymentIcon sx={{ fontSize: 40, color: 'warning.main', mb: 2 }} />
                         <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
@@ -416,55 +473,79 @@ const UserHomePage = () => {
             {/* Vehicle Information */}
             <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)', mt: 4, borderRadius: 3 }}>
               <CardContent sx={{ p: 4 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Your Vehicles
                   </Typography>
-                  <Button variant="outlined" onClick={() => setVehicleDialogOpen(true)}>Add Vehicle</Button>
+                  <Button variant="outlined" onClick={() => {
+                      setEditIndex(null);
+                      setVehicleForm({ make: '', model: '', year: '', batteryCapacity: '', preferredChargingType: 'fast' });
+                      setCapacityError('');
+                      setYearError('');
+                      setDuplicateError('');
+                      setVehicleDialogOpen(true);
+                    }}>Add Vehicle</Button>
                 </Box>
                 {myVehicles.length === 0 ? (
                   <Typography variant="body2" color="text.secondary">No vehicles added yet.</Typography>
                 ) : (
-                  <Grid container spacing={3}>
+                  <Grid container spacing={3} justifyContent="center">
                     {myVehicles.map((vehicle, index) => (
                       <Grid item xs={12} sm={6} md={4} key={`${vehicle.make}-${vehicle.model}-${index}`}>
-                        <Paper sx={{ p: 3, border: '1px solid #e5e7eb', borderRadius: 3 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                            <CarIcon sx={{ color: 'primary.main' }} />
+                        <Paper sx={{ p: 3, border: '1px solid #e5e7eb', borderRadius: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2 }}>
+                            <CarIcon sx={{ color: 'primary.main', mt: 0.5 }} />
                             <Box sx={{ flex: 1 }}>
-                              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                              <Typography variant="h6" sx={{ fontWeight: 600, textAlign: 'left' }}>
                                 {vehicle.make} {vehicle.model}
                               </Typography>
-                              <Typography variant="body2" color="text.secondary">
+                              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'left' }}>
                                 {vehicle.year || ''}
                               </Typography>
                             </Box>
-                            <Button size="small" sx={{ mr: 1 }} onClick={() => {
-                              setEditIndex(index);
-                              setVehicleDialogOpen(true);
-                              setVehicleForm({
-                                make: vehicle.make || '',
-                                model: vehicle.model || '',
-                                year: vehicle.year ? String(vehicle.year) : '',
-                                batteryCapacity: vehicle.batteryCapacity ? String(vehicle.batteryCapacity) : '',
-                                preferredChargingType: vehicle.preferredChargingType || 'fast'
-                              });
-                            }}>Edit</Button>
-                            <Button size="small" color="error" onClick={async () => {
-                              try {
-                                const list = await removeUserVehicleApi(index);
-                                setMyVehicles(list);
-                              } catch (e) {
-                                setError(e.message || 'Failed to remove vehicle');
-                              }
-                            }}>Remove</Button>
                           </Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Battery: {vehicle.batteryCapacity} kWh
-                          </Typography>
-                          {vehicle.preferredChargingType && (
-                            <Typography variant="body2" color="text.secondary">Preferred: {vehicle.preferredChargingType}</Typography>
-                          )}
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto' }}>
+                            <Button 
+                              size="small" 
+                              onClick={() => {
+                                setEditIndex(index);
+                                setVehicleDialogOpen(true);
+                                setVehicleForm({
+                                  make: vehicle.make || '',
+                                  model: vehicle.model || '',
+                                  year: vehicle.year ? String(vehicle.year) : '',
+                                  batteryCapacity: vehicle.batteryCapacity ? String(vehicle.batteryCapacity) : '',
+                                  preferredChargingType: vehicle.preferredChargingType || 'fast'
+                                });
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              size="small" 
+                              color="error" 
+                              onClick={async () => {
+                                try {
+                                  const list = await removeUserVehicleApi(index);
+                                  setMyVehicles(list);
+                                } catch (e) {
+                                  setError(e.message || 'Failed to remove vehicle');
+                                }
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </Box>
+                          <Box sx={{ mt: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'left' }}>
+                              Battery: {vehicle.batteryCapacity} kWh
+                            </Typography>
+                            {vehicle.preferredChargingType && (
+                              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'left' }}>
+                                Preferred: {vehicle.preferredChargingType}
+                              </Typography>
+                            )}
+                          </Box>
                         </Paper>
                       </Grid>
                     ))}
@@ -480,9 +561,158 @@ const UserHomePage = () => {
 
       <Footer />
 
+      {/* Request New Vehicle Dialog */}
+      <Dialog 
+        open={requestVehicleDialogOpen} 
+        onClose={() => { 
+          setRequestVehicleDialogOpen(false);
+          setRequestVehicleForm({ make: '', model: '' });
+          setRequestVehicleError('');
+          setRequestVehicleSuccess('');
+        }} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle>Request New Vehicle</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Can't find your vehicle in our list? Request it here and our team will add it.
+          </Typography>
+          
+          {requestVehicleSuccess && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {requestVehicleSuccess}
+            </Alert>
+          )}
+          
+          {requestVehicleError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {requestVehicleError}
+            </Alert>
+          )}
+          
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12}>
+              <Autocomplete
+                fullWidth
+                options={vehicleMakes}
+                value={requestVehicleForm.make}
+                onChange={(event, newValue) => {
+                  setRequestVehicleForm({ ...requestVehicleForm, make: newValue || '' });
+                  setRequestVehicleError('');
+                }}
+                onInputChange={(event, newInputValue) => {
+                  if (event && event.type === 'change') {
+                    setRequestVehicleForm({ ...requestVehicleForm, make: newInputValue });
+                    setRequestVehicleError('');
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Make"
+                    placeholder="Search for a make (e.g., Tesla)"
+                    required
+                    helperText="Select or type the make of your vehicle"
+                  />
+                )}
+                freeSolo
+                clearOnEscape
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Model"
+                value={requestVehicleForm.model}
+                onChange={(e) => {
+                  setRequestVehicleForm({ ...requestVehicleForm, model: e.target.value });
+                  setRequestVehicleError('');
+                }}
+                required
+                helperText="Enter the model of your vehicle (e.g., Model 3, Leaf, etc.)"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => { 
+              setRequestVehicleDialogOpen(false);
+              setRequestVehicleForm({ make: '', model: '' });
+              setRequestVehicleError('');
+              setRequestVehicleSuccess('');
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              setRequestVehicleError('');
+              setRequestVehicleSuccess('');
+              
+              // Validation
+              if (!requestVehicleForm.make.trim()) {
+                setRequestVehicleError('Make is required');
+                return;
+              }
+              
+              if (!requestVehicleForm.model.trim()) {
+                setRequestVehicleError('Model is required');
+                return;
+              }
+              
+              try {
+                // Import the API function
+                const { createVehicleRequestApi } = await import('../utils/api');
+                await createVehicleRequestApi({
+                  make: requestVehicleForm.make.trim(),
+                  model: requestVehicleForm.model.trim()
+                });
+                
+                setRequestVehicleSuccess('Vehicle request submitted successfully! Our team will review it.');
+                
+                // Clear form after success
+                setRequestVehicleForm({ make: '', model: '' });
+                
+                // Close dialog after 2 seconds
+                setTimeout(() => {
+                  setRequestVehicleDialogOpen(false);
+                  setRequestVehicleSuccess('');
+                }, 2000);
+              } catch (e) {
+                setRequestVehicleError(e.message || 'Failed to submit vehicle request');
+              }
+            }}
+          >
+            Submit Request
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
       {/* Add Vehicle Dialog */}
-      <Dialog open={vehicleDialogOpen} onClose={() => { setVehicleDialogOpen(false); setEditIndex(null); }} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Your Vehicle</DialogTitle>
+      <Dialog open={vehicleDialogOpen} onClose={() => { 
+                      setVehicleDialogOpen(false); 
+                      setEditIndex(null);
+                      setVehicleForm({ make: '', model: '', year: '', batteryCapacity: '', preferredChargingType: 'fast' });
+                      setCapacityError('');
+                      setYearError('');
+                      setDuplicateError('');
+                    }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Add Your Vehicle
+          <Button 
+            size="small" 
+            onClick={() => {
+              setVehicleDialogOpen(false);
+              setRequestVehicleDialogOpen(true);
+            }}
+            sx={{ float: 'right', mt: -0.5 }}
+          >
+            Request Vehicle Model
+          </Button>
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid item xs={12} sm={6}>
@@ -494,17 +724,9 @@ const UserHomePage = () => {
                 onChange={async (e) => {
                   const make = e.target.value;
                   setVehicleForm({ ...vehicleForm, make, model: '', batteryCapacity: '' });
-                  setModelsForMake([]);
-                  setCapacitiesForModel([]);
                   setCapacityError('');
                   setDuplicateError('');
                   setYearError('');
-                  if (make) {
-                    try {
-                      const models = await getModelsByMakeApi(make);
-                      setModelsForMake(models);
-                    } catch { setModelsForMake([]); }
-                  }
                 }}
                 required
                 helperText={makes.length === 0 ? 'No makes available' : ''}
@@ -526,13 +748,6 @@ const UserHomePage = () => {
                   setCapacityError('');
                   setDuplicateError('');
                   setYearError('');
-                  setCapacitiesForModel([]);
-                  if (vehicleForm.make && model) {
-                    try {
-                      const caps = await getCapacitiesByMakeModelApi(vehicleForm.make, model);
-                      setCapacitiesForModel(caps);
-                    } catch { setCapacitiesForModel([]); }
-                  }
                 }}
                 required
                 helperText={!vehicleForm.make ? 'Select make first' : (duplicateError || '')}
@@ -592,7 +807,14 @@ const UserHomePage = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setVehicleDialogOpen(false); setEditIndex(null); setCapacityError(''); setYearError(''); setDuplicateError(''); }}>Cancel</Button>
+          <Button onClick={() => { 
+                      setVehicleDialogOpen(false); 
+                      setEditIndex(null);
+                      setVehicleForm({ make: '', model: '', year: '', batteryCapacity: '', preferredChargingType: 'fast' });
+                      setCapacityError('');
+                      setYearError('');
+                      setDuplicateError('');
+                    }}>Cancel</Button>
           <Button
             variant="contained"
             onClick={async () => {
@@ -634,12 +856,48 @@ const UserHomePage = () => {
                     preferredChargingType: vehicleForm.preferredChargingType
                   });
                 } else {
+                  // Try to enrich with catalog connectors
+                  let chargingAC, chargingDC;
+                  try {
+                    const caps = await getCapacitiesByMakeModelApi(make, model);
+                    // If catalog returns connector details elsewhere, extend here in future
+                  } catch {}
+                  // If admin added full details to catalog, fetch from public catalog and map by make+model
+                  try {
+                    const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+                    const res = await fetch(`${apiBase}/public/vehicles`);
+                    if (res.ok) {
+                      const data = await res.json();
+                      const list = Array.isArray(data?.data) ? data.data : [];
+                      const norm = (s) => String(s || '').trim().toLowerCase();
+                      const v = list.find(cv => norm(cv.make) === norm(make) && norm(cv.model) === norm(model));
+                      if (v) {
+                        if (v.chargingAC && v.chargingAC.supported) {
+                          chargingAC = {
+                            supported: true,
+                            ...(typeof v.chargingAC.maxPower === 'number' ? { maxPower: v.chargingAC.maxPower } : {}),
+                            connectorTypes: Array.isArray(v.chargingAC.connectorTypes) ? v.chargingAC.connectorTypes.map(String) : []
+                          };
+                        }
+                        if (v.chargingDC && v.chargingDC.supported) {
+                          chargingDC = {
+                            supported: true,
+                            ...(typeof v.chargingDC.maxPower === 'number' ? { maxPower: v.chargingDC.maxPower } : {}),
+                            connectorTypes: Array.isArray(v.chargingDC.connectorTypes) ? v.chargingDC.connectorTypes.map(String) : []
+                          };
+                        }
+                      }
+                    }
+                  } catch {}
+
                   list = await addUserVehicleApi({
                     make,
                     model,
                     year,
                     batteryCapacity,
-                    preferredChargingType: vehicleForm.preferredChargingType
+                    preferredChargingType: vehicleForm.preferredChargingType,
+                    ...(chargingAC ? { chargingAC } : {}),
+                    ...(chargingDC ? { chargingDC } : {})
                   });
                 }
                 setMyVehicles(Array.isArray(list) ? list : []);
@@ -669,6 +927,7 @@ const UserHomePage = () => {
                 value={editForm.startTime}
                 onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
                 InputLabelProps={{ shrink: true }}
+                inputProps={{ min: new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 16) }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -692,7 +951,7 @@ const UserHomePage = () => {
                 value={editForm.chargerType}
                 onChange={(e) => setEditForm({ ...editForm, chargerType: e.target.value })}
               >
-                {['ac_type2','dc_ccs','dc_chademo','dc_gbt','ac_3pin'].map((t) => (
+                {['type1','type2','bharat_ac_001','bharat_dc_001','ccs2','chademo','gbt_type6','type7_leccs','mcs','chaoji'].map((t) => (
                   <MenuItem key={t} value={t}>{t}</MenuItem>
                 ))}
               </TextField>
@@ -703,6 +962,15 @@ const UserHomePage = () => {
           <Button onClick={() => { setEditBookingDialogOpen(false); setEditingBooking(null); }}>Cancel</Button>
           <Button variant="contained" onClick={async () => {
             if (!editingBooking) return;
+            
+            // Validate that start time is at least 10 minutes from now
+            const startTime = new Date(editForm.startTime);
+            const tenMinutesFromNow = new Date(Date.now() + 10 * 60 * 1000);
+            if (startTime < tenMinutesFromNow) {
+              alert('Start time must be at least 10 minutes from now');
+              return;
+            }
+            
             const startISO = new Date(editForm.startTime).toISOString();
             const endISO = new Date(new Date(editForm.startTime).getTime() + Number(editForm.duration) * 60000).toISOString();
             try {

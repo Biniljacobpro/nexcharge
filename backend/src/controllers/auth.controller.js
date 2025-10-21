@@ -28,7 +28,7 @@ export const updateUserVehicleAtIndex = async (req, res) => {
       return res.status(404).json({ success: false, message: 'EV User not found' });
     }
     const { index } = req.params;
-    const { make, model, year, batteryCapacity, preferredChargingType } = req.body;
+    const { make, model, year, batteryCapacity, preferredChargingType, chargingAC, chargingDC } = req.body;
     const idx = Number(index);
     const vehicles = user.roleSpecificData?.evUserInfo?.vehicles || [];
     if (Number.isNaN(idx) || idx < 0 || idx >= vehicles.length) {
@@ -45,6 +45,8 @@ export const updateUserVehicleAtIndex = async (req, res) => {
       year: typeof year === 'number' ? year : undefined,
       batteryCapacity: Number(batteryCapacity),
       preferredChargingType: preferredChargingType || undefined,
+      chargingAC: chargingAC || undefined,
+      chargingDC: chargingDC || undefined
     };
 
     // Duplicate check excluding the same index
@@ -91,7 +93,7 @@ export const addUserVehicle = async (req, res) => {
     if (!user || user.role !== 'ev_user') {
       return res.status(404).json({ success: false, message: 'EV User not found' });
     }
-    const { make, model, year, batteryCapacity, preferredChargingType } = req.body;
+    const { make, model, year, batteryCapacity, preferredChargingType, chargingAC, chargingDC } = req.body;
     if (!make || !model || !batteryCapacity) {
       return res.status(400).json({ success: false, message: 'make, model and batteryCapacity are required' });
     }
@@ -116,6 +118,8 @@ export const addUserVehicle = async (req, res) => {
       year: typeof year === 'number' ? year : undefined,
       batteryCapacity: Number(batteryCapacity),
       preferredChargingType: preferredChargingType || undefined,
+      chargingAC: chargingAC || undefined,
+      chargingDC: chargingDC || undefined
     });
     await user.save();
     return res.status(201).json({ success: true, message: 'Vehicle added', data: user.roleSpecificData.evUserInfo.vehicles });
@@ -286,20 +290,30 @@ export const updateProfile = async (req, res) => {
       return res.status(400).json({ error: 'First name and last name are required' });
     }
 
-    if (firstName.length < 2 || firstName.length > 50) {
-      return res.status(400).json({ error: 'First name must be between 2 and 50 characters' });
+    // Trim and validate first name
+    const trimmedFirstName = firstName.trim();
+    if (trimmedFirstName.length < 2 || trimmedFirstName.length > 10) {
+      return res.status(400).json({ error: 'First name must be between 2 and 10 characters' });
+    }
+    if (!/^[A-Za-z]+$/.test(trimmedFirstName)) {
+      return res.status(400).json({ error: 'Letters only, no spaces' });
     }
 
-    if (lastName.length < 2 || lastName.length > 50) {
-      return res.status(400).json({ error: 'Last name must be between 2 and 50 characters' });
+    // Trim and validate last name
+    const trimmedLastName = lastName.trim();
+    if (trimmedLastName.length < 2 || trimmedLastName.length > 10) {
+      return res.status(400).json({ error: 'Last name must be between 2 and 10 characters' });
+    }
+    if (!/^[A-Za-z]+$/.test(trimmedLastName)) {
+      return res.status(400).json({ error: 'Letters only, no spaces' });
     }
 
-    if (phone && !/^\+?[\d\s\-\(\)]{10,15}$/.test(phone)) {
-      return res.status(400).json({ error: 'Invalid phone number format' });
+    if (phone && !/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ error: 'Phone number must be exactly 10 digits' });
     }
 
-    if (address && address.length > 200) {
-      return res.status(400).json({ error: 'Address must be less than 200 characters' });
+    if (address && address.length > 80) {
+      return res.status(400).json({ error: 'Address must be less than 80 characters' });
     }
 
     const user = await User.findById(userId);
@@ -308,9 +322,9 @@ export const updateProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Update profile fields
-    user.personalInfo.firstName = firstName;
-    user.personalInfo.lastName = lastName;
+    // Update profile fields with trimmed values
+    user.personalInfo.firstName = trimmedFirstName;
+    user.personalInfo.lastName = trimmedLastName;
     if (phone !== undefined) user.personalInfo.phone = phone;
     if (address !== undefined) user.personalInfo.address = address;
 

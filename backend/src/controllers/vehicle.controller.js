@@ -1,5 +1,5 @@
 import Vehicle from '../models/vehicle.model.js';
-import Station from '../models/station.model.js';
+import User from '../models/user.model.js';
 
 // Helper to get user ID from request
 const getUserId = (req) => req.user.sub || req.user.id;
@@ -75,8 +75,44 @@ export const getVehicleById = async (req, res) => {
 export const createVehicle = async (req, res) => {
   try {
     const userId = getUserId(req);
+    
+    // Validate required fields
+    const { make, model, vehicleType, batteryCapacity } = req.body;
+    
+    if (!make || !make.trim()) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Make is required' 
+      });
+    }
+    
+    if (!model || !model.trim()) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Model is required' 
+      });
+    }
+    
+    if (!vehicleType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Vehicle type is required' 
+      });
+    }
+    
+    const batteryCapacityNum = Number(batteryCapacity);
+    if (isNaN(batteryCapacityNum) || batteryCapacityNum < 1 || batteryCapacityNum > 500) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Battery capacity must be between 1-500 kWh' 
+      });
+    }
+    
     const vehicleData = {
       ...req.body,
+      make: make.trim(),
+      model: model.trim(),
+      batteryCapacity: batteryCapacityNum,
       createdBy: userId
     };
 
@@ -111,10 +147,65 @@ export const updateVehicle = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = getUserId(req);
+    
+    // Validate required fields if they are being updated
+    const { make, model, vehicleType, batteryCapacity } = req.body;
+    
+    if (make !== undefined && (!make || !make.trim())) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Make is required' 
+      });
+    }
+    
+    if (model !== undefined && (!model || !model.trim())) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Model is required' 
+      });
+    }
+    
+    if (vehicleType !== undefined && !vehicleType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Vehicle type is required' 
+      });
+    }
+    
+    if (batteryCapacity !== undefined) {
+      const batteryCapacityNum = Number(batteryCapacity);
+      if (isNaN(batteryCapacityNum) || batteryCapacityNum < 1 || batteryCapacityNum > 500) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Battery capacity must be between 1-500 kWh' 
+        });
+      }
+    }
 
     const vehicle = await Vehicle.findById(id);
     if (!vehicle) {
       return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+
+    // Check if trying to deactivate vehicle and if any user has this vehicle
+    if (req.body.isActive === false) {
+      // Find users who have this vehicle (matching make and model)
+      const usersWithVehicle = await User.find({
+        'roleSpecificData.evUserInfo.vehicles': {
+          $elemMatch: {
+            make: vehicle.make,
+            model: vehicle.model
+          }
+        }
+      });
+
+      if (usersWithVehicle.length > 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Cannot deactivate vehicle because it is assigned to one or more users',
+          assignedUsersCount: usersWithVehicle.length
+        });
+      }
     }
 
     // Validate charging specifications
@@ -157,6 +248,25 @@ export const deleteVehicle = async (req, res) => {
     const vehicle = await Vehicle.findById(id);
     if (!vehicle) {
       return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+
+    // Check if any user has this vehicle in their vehicles array
+    // Find users who have this vehicle (matching make and model)
+    const usersWithVehicle = await User.find({
+      'roleSpecificData.evUserInfo.vehicles': {
+        $elemMatch: {
+          make: vehicle.make,
+          model: vehicle.model
+        }
+      }
+    });
+
+    if (usersWithVehicle.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cannot delete or deactivate vehicle because it is assigned to one or more users',
+        assignedUsersCount: usersWithVehicle.length
+      });
     }
 
     if (hardDelete === 'true') {

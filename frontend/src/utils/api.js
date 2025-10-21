@@ -61,11 +61,11 @@ export const getMyVehiclesApi = async () => {
   return data.data || [];
 };
 
-export const addUserVehicleApi = async ({ make, model, year, batteryCapacity, preferredChargingType }) => {
+export const addUserVehicleApi = async ({ make, model, year, batteryCapacity, preferredChargingType, chargingAC, chargingDC }) => {
   const res = await authFetch(`${API_BASE}/auth/my-vehicles`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ make, model, year, batteryCapacity, preferredChargingType })
+    body: JSON.stringify({ make, model, year, batteryCapacity, preferredChargingType, chargingAC, chargingDC })
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || data.message || 'Failed to add vehicle');
@@ -189,6 +189,30 @@ export const adminLiveStats = async () => {
     weeklyRevenue: 0,
     dailyRevenueChart: []
   };
+};
+
+// Payments API
+export const getMyPaymentsApi = async () => {
+  const res = await authFetch(`${API_BASE}/payments/my`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to load payments');
+  return Array.isArray(data?.data) ? data.data : [];
+};
+
+export const downloadReceiptPdf = async (bookingId) => {
+  const url = `${API_BASE}/payments/receipt/${encodeURIComponent(bookingId)}`;
+  const res = await authFetch(url, { method: 'GET' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || data.error || 'Failed to download receipt');
+  }
+  const blob = await res.blob();
+  const link = document.createElement('a');
+  link.href = window.URL.createObjectURL(blob);
+  link.download = `receipt_${bookingId}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 };
 
 export const adminUsers = async () => {
@@ -376,7 +400,12 @@ export const createVehicleApi = async (payload) => {
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.message || 'Failed to create vehicle');
+  if (!res.ok) {
+    if (data.errors && Array.isArray(data.errors)) {
+      throw new Error(`Validation error: ${data.errors.join(', ')}`);
+    }
+    throw new Error(data.error || data.message || 'Failed to create vehicle');
+  }
   return data;
 };
 
@@ -387,7 +416,12 @@ export const updateVehicleApi = async (id, payload) => {
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update vehicle');
+  if (!res.ok) {
+    if (data.errors && Array.isArray(data.errors)) {
+      throw new Error(`Validation error: ${data.errors.join(', ')}`);
+    }
+    throw new Error(data.error || data.message || 'Failed to update vehicle');
+  }
   return data;
 };
 
@@ -395,6 +429,44 @@ export const deleteVehicleApi = async (id, hardDelete = false) => {
   const res = await authFetch(`${API_BASE}/vehicles/${id}?hardDelete=${hardDelete ? 'true' : 'false'}`, { method: 'DELETE' });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || data.message || 'Failed to delete vehicle');
+  return data;
+};
+
+// Vehicle Requests
+export const createVehicleRequestApi = async ({ make, model }) => {
+  const res = await authFetch(`${API_BASE}/vehicle-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ make, model })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to submit vehicle request');
+  return data;
+};
+
+export const getVehicleRequestsApi = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const res = await authFetch(`${API_BASE}/vehicle-requests${qs ? `?${qs}` : ''}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to load vehicle requests');
+  return data;
+};
+
+export const updateVehicleRequestStatusApi = async (id, { status, notes }) => {
+  const res = await authFetch(`${API_BASE}/vehicle-requests/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, notes })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update vehicle request');
+  return data;
+};
+
+export const deleteVehicleRequestApi = async (id) => {
+  const res = await authFetch(`${API_BASE}/vehicle-requests/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to delete vehicle request');
   return data;
 };
 

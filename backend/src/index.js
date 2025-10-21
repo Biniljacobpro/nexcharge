@@ -15,9 +15,11 @@ import stationManagerRoutes from './routes/stationManager.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import bookingRoutes from './routes/booking.routes.js';
 import vehicleRoutes from './routes/vehicle.routes.js';
+import vehicleRequestRoutes from './routes/vehicleRequest.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import availabilityRoutes from './routes/availability.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import { startBookingReminderJob } from './jobs/bookingReminder.job.js';
 // Removed deprecated corporate application routes
 
 // Ensure env is loaded from backend/.env or projectRoot/.env
@@ -65,6 +67,7 @@ app.use('/api/station-manager', stationManagerRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/vehicle-requests', vehicleRequestRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -87,10 +90,13 @@ const PORT = process.env.PORT || 4000;
 		}
 		await mongoose.connect(process.env.MONGODB_URI);
 		console.log('MongoDB connected');
+		
+		// Start the booking reminder job
+		startBookingReminderJob();
+		
 		app.listen(PORT, () => console.log(`API listening on :${PORT}`));
 	} catch (e) {
 		console.error('Failed to start server', e);
 		process.exit(1);
 	}
 })();
-

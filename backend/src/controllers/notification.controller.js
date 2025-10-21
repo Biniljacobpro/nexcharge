@@ -199,8 +199,8 @@ export const createBookingNotification = async (userId, type, booking, station) 
         break;
 
       case 'booking_reminder':
-        title = '⏰ Booking Reminder';
-        message = `Your charging session at ${station?.name || 'the station'} starts in 30 minutes.`;
+        title = '⏰ Charging Session Reminder';
+        message = `Your charging session at ${station?.name || 'the station'} starts in 5 minutes. Please arrive soon!`;
         actionType = 'navigate_to_bookings';
         actionData = { bookingId: booking._id };
         break;
@@ -233,3 +233,5 @@ export const createBookingNotification = async (userId, type, booking, station) 
     throw error;
   }
 };
+
+

@@ -29,6 +29,16 @@ const VehicleInfoSchema = new mongoose.Schema({
 	batteryCapacity: Number,
 	currentBatteryLevel: Number,
 	preferredChargingType: { type: String, enum: ['fast', 'slow', 'rapid'] },
+	chargingAC: {
+		supported: { type: Boolean, default: true },
+		maxPower: Number,
+		connectorTypes: [{ type: String }]
+	},
+	chargingDC: {
+		supported: { type: Boolean, default: true },
+		maxPower: Number,
+		connectorTypes: [{ type: String }]
+	}
 }, { _id: false });
 
 const EVUserInfoSchema = new mongoose.Schema({

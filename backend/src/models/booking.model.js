@@ -20,7 +20,7 @@ const BookingSchema = new mongoose.Schema({
   },
   chargerType: {
     type: String,
-    enum: ['ac_type2', 'dc_ccs', 'dc_chademo', 'dc_gbt', 'ac_3pin'],
+    enum: ['type1', 'type2', 'bharat_ac_001', 'bharat_dc_001', 'ccs2', 'chademo', 'gbt_type6', 'type7_leccs', 'mcs', 'chaoji'],
     required: true
   },
   
@@ -88,6 +88,12 @@ const BookingSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'confirmed', 'active', 'completed', 'cancelled', 'no_show'],
     default: 'pending'
+  },
+  
+  // Reminder status
+  reminderSent: {
+    type: Boolean,
+    default: false
   },
   
   // Additional information

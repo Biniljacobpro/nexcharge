@@ -87,6 +87,32 @@ const StationDetails = () => {
     { value: '5', label: '5 hours' }
   ];
 
+  // Enrich user vehicles with catalog connectorTypes if missing (defined early to avoid TDZ)
+  const enrichedMyVehicles = React.useMemo(() => {
+    if (!Array.isArray(myVehicles) || myVehicles.length === 0) return [];
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    return myVehicles.map((v) => {
+      const hasAC = v?.chargingAC?.supported && Array.isArray(v?.chargingAC?.connectorTypes) && v.chargingAC.connectorTypes.length > 0;
+      const hasDC = v?.chargingDC?.supported && Array.isArray(v?.chargingDC?.connectorTypes) && v.chargingDC.connectorTypes.length > 0;
+      if (hasAC || hasDC) return v;
+      const match = Array.isArray(catalogVehicles) ? catalogVehicles.find(cv => norm(cv.make) === norm(v?.make) && norm(cv.model) === norm(v?.model)) : null;
+      if (!match) return v;
+      return {
+        ...v,
+        chargingAC: match.chargingAC ? {
+          supported: !!match.chargingAC.supported,
+          ...(typeof match.chargingAC.maxPower === 'number' ? { maxPower: match.chargingAC.maxPower } : {}),
+          connectorTypes: Array.isArray(match.chargingAC.connectorTypes) ? match.chargingAC.connectorTypes.map((t) => String(t).toLowerCase()) : []
+        } : v.chargingAC,
+        chargingDC: match.chargingDC ? {
+          supported: !!match.chargingDC.supported,
+          ...(typeof match.chargingDC.maxPower === 'number' ? { maxPower: match.chargingDC.maxPower } : {}),
+          connectorTypes: Array.isArray(match.chargingDC.connectorTypes) ? match.chargingDC.connectorTypes.map((t) => String(t).toLowerCase()) : []
+        } : v.chargingDC,
+      };
+    });
+  }, [myVehicles, catalogVehicles]);
+
   const toLocalDateTimeValue = (date) => {
     if (!date) return '';
     const pad = (n) => String(n).padStart(2, '0');
@@ -98,10 +124,57 @@ const StationDetails = () => {
     return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
   };
 
-  const nowLocalValue = toLocalDateTimeValue(new Date());
+  // Infer best charger type for a given vehicle based on station support and availability
+  const getCompatibleTypesForVehicle = (vehicle) => {
+    if (!station) return [];
+    const stationTypes = Array.isArray(station.capacity?.chargerTypes) ? station.capacity.chargerTypes : [];
+    // Filter types that the vehicle supports using existing checkVehicleSupport logic
+    const compatible = stationTypes.filter((t) => checkVehicleSupport(t, [vehicle]));
+    // Sort compatible types by current availability desc
+    const withAvailability = compatible.map((t) => ({
+      type: t,
+      available: getAvailableChargersByType(t).length
+    })).sort((a, b) => b.available - a.available);
+    return withAvailability.map((x) => x.type);
+  };
+
+  // Auto-select charger type when vehicle or station changes
+  useEffect(() => {
+    try {
+      const idx = Number(bookingForm.selectedVehicleIndex);
+      const v = Number.isInteger(idx) ? enrichedMyVehicles[idx] : undefined;
+      if (!v) return;
+      const compat = getCompatibleTypesForVehicle(v);
+      if (compat && compat.length > 0) {
+        if (bookingForm.chargerType !== compat[0]) {
+          setBookingForm((bf) => ({ ...bf, chargerType: compat[0] }));
+        }
+      } else {
+        // Fallback: clear if no compatible
+        if (bookingForm.chargerType) {
+          setBookingForm((bf) => ({ ...bf, chargerType: '' }));
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingForm.selectedVehicleIndex, enrichedMyVehicles, station]);
+
+  const getMinStartTime = () => {
+    return toLocalDateTimeValue(new Date(Date.now() + 10 * 60 * 1000)); // 10 minutes from now
+  };
 
   const handleStartTimeChange = (value) => {
     const start = value ? new Date(value) : null;
+    
+    // Validate that start time is at least 10 minutes from now
+    if (start) {
+      const tenMinutesFromNow = new Date(Date.now() + 10 * 60 * 1000);
+      if (start < tenMinutesFromNow) {
+        setSnackbar({ open: true, message: 'Start time must be at least 10 minutes from now', severity: 'error' });
+        return;
+      }
+    }
+    
     let computedEnd = null;
     if (start) {
       // Calculate end time based on selected duration
@@ -160,6 +233,55 @@ const StationDetails = () => {
     } catch (e) { console.error('Failed to load bookings', e); }
   };
 
+  // Mapping between station charger types and vehicle connector types (new unified types)
+  const chargerTypeToConnectorTypeMap = {
+    'type1': ['type1'],
+    'type2': ['type2'],
+    'bharat_ac_001': ['bharat_ac_001', 'type2'],
+    'bharat_dc_001': ['bharat_dc_001'],
+    'ccs2': ['ccs2'],
+    'chademo': ['chademo'],
+    'gbt_type6': ['gbt_type6'],
+    'type7_leccs': ['type7_leccs'],
+    'mcs': ['mcs'],
+    'chaoji': ['chaoji']
+  };
+
+  
+
+  // Function to check if any user vehicle supports a specific charger type
+  const checkVehicleSupport = (chargerType, vehicles) => {
+    // If no vehicles, return false
+    if (!vehicles || vehicles.length === 0) {
+      return false;
+    }
+    
+    // Get the connector types that match this charger type
+    const key = String(chargerType || '').trim().toLowerCase();
+    const supportedConnectorTypes = chargerTypeToConnectorTypeMap[key] || [];
+    
+    // Check if any vehicle supports any of these connector types
+    return vehicles.some(vehicle => {
+      // Check AC charging support
+      if (vehicle.chargingAC && vehicle.chargingAC.supported) {
+        if (vehicle.chargingAC.connectorTypes && 
+            vehicle.chargingAC.connectorTypes.some(type => supportedConnectorTypes.includes(String(type).toLowerCase()))) {
+          return true;
+        }
+      }
+      
+      // Check DC charging support
+      if (vehicle.chargingDC && vehicle.chargingDC.supported) {
+        if (vehicle.chargingDC.connectorTypes && 
+            vehicle.chargingDC.connectorTypes.some(type => supportedConnectorTypes.includes(String(type).toLowerCase()))) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -205,6 +327,15 @@ const StationDetails = () => {
       setSnackbar({ open: true, message: 'Please fill all required fields including vehicle selection', severity: 'error' });
       return;
     }
+    
+    // Validate that start time is at least 10 minutes from now
+    const startTime = new Date(bookingForm.startTime);
+    const tenMinutesFromNow = new Date(Date.now() + 10 * 60 * 1000);
+    if (startTime < tenMinutesFromNow) {
+      setSnackbar({ open: true, message: 'Start time must be at least 10 minutes from now', severity: 'error' });
+      return;
+    }
+    
     // Validate charge fields (use defaults if not provided since they're hidden)
     const curr = Number(bookingForm.currentCharge || 20);
     const targ = Number(bookingForm.targetCharge || 80);
@@ -649,6 +780,10 @@ const StationDetails = () => {
                     const available = getAvailableChargersByType(type);
                     const power = available[0]?.power || station.capacity?.maxPowerPerCharger || 50;
                     const isAvailable = available.length > 0;
+                    
+                    // Check if any user vehicle supports this charger type
+                    const userHasCompatibleVehicle = checkVehicleSupport(type, enrichedMyVehicles);
+                    const showNotSupported = !userHasCompatibleVehicle && myVehicles && myVehicles.length > 0;
 
                     return (
                       <Grid item xs={12} sm={6} md={4} key={idx}>
@@ -688,7 +823,7 @@ const StationDetails = () => {
                             }}>
                               {power} kW
                             </Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, alignItems: 'center' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, alignItems: 'center', flexDirection: 'column' }}>
                               <Chip
                                 label={isAvailable ? `${available.length} Available` : 'Not Available'}
                                 color={isAvailable ? "success" : "error"}
@@ -699,9 +834,14 @@ const StationDetails = () => {
                                   '& .MuiChip-label': { fontSize: '0.8rem' }
                                 }}
                               />
-                              {isAvailable && (
+                              {isAvailable && !showNotSupported && (
                                 <Typography variant="caption" sx={{ color: '#059669', fontWeight: 600 }}>
                                   ✓ Ready to charge
+                                </Typography>
+                              )}
+                              {showNotSupported && (
+                                <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 600 }}>
+                                  ⚠️ Not supported by your vehicles
                                 </Typography>
                               )}
                             </Box>
@@ -1067,23 +1207,19 @@ const StationDetails = () => {
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Charger Type</InputLabel>
-                  <Select
-                    value={bookingForm.chargerType}
-                    label="Charger Type"
-                    onChange={(e) => setBookingForm({...bookingForm, chargerType: e.target.value})}
-                  >
-                    {(station.capacity?.chargerTypes || []).map((type) => {
-                      const available = getAvailableChargersByType(type);
-                      const disabled = available.length === 0;
-                      return (
-                        <MenuItem key={type} value={type} disabled={disabled}>
-                          {type.replace('_', ' ').toUpperCase()} ({available.length} available)
-                        </MenuItem>
-                      );
-                    })}
-                  </Select>
+                <FormControl fullWidth>
+                  <InputLabel shrink>Charger Type</InputLabel>
+                  <Box sx={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 1,
+                    px: 2,
+                    py: 1.5,
+                    color: bookingForm.chargerType ? 'text.primary' : 'text.secondary'
+                  }}>
+                    {bookingForm.chargerType
+                      ? bookingForm.chargerType.replace('_',' ').toUpperCase()
+                      : 'Auto-selected based on your vehicle'}
+                  </Box>
                 </FormControl>
               </Grid>
               
@@ -1110,7 +1246,9 @@ const StationDetails = () => {
                   label="Start Time"
                   type="datetime-local"
                   InputLabelProps={{ shrink: true }}
-                  inputProps={{ min: nowLocalValue }}
+                  inputProps={{ 
+                    min: getMinStartTime()
+                  }}
                   value={bookingForm.startTime || ''}
                   onChange={(e) => handleStartTimeChange(e.target.value)}
                   required

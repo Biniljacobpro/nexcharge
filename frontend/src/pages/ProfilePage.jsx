@@ -105,20 +105,41 @@ const ProfilePage = () => {
   // Validation functions
   const validateProfile = () => {
     const errors = {};
-    if (!profileForm.firstName.trim()) errors.firstName = 'First name is required';
-    else if (profileForm.firstName.length < 2) errors.firstName = 'First name must be at least 2 characters';
-    else if (profileForm.firstName.length > 50) errors.firstName = 'First name must be less than 50 characters';
-
-    if (!profileForm.lastName.trim()) errors.lastName = 'Last name is required';
-    else if (profileForm.lastName.length < 2) errors.lastName = 'Last name must be at least 2 characters';
-    else if (profileForm.lastName.length > 50) errors.lastName = 'Last name must be less than 50 characters';
-
-    if (profileForm.phone && !/^\+?[\d\s\-\(\)]{10,15}$/.test(profileForm.phone)) {
-      errors.phone = 'Invalid phone number format';
+    
+    // First name validation
+    if (!profileForm.firstName.trim()) {
+      errors.firstName = 'First name is required';
+    } else if (!/^[A-Za-z]+$/.test(profileForm.firstName.trim())) {
+      errors.firstName = 'Letters only, no spaces';
+    } else if (profileForm.firstName.trim().length < 2) {
+      errors.firstName = 'First name must be at least 2 characters';
+    } else if (profileForm.firstName.trim().length > 10) {
+      errors.firstName = 'First name must be less than 10 characters';
     }
 
-    if (profileForm.address && profileForm.address.length > 200) {
-      errors.address = 'Address must be less than 200 characters';
+    // Last name validation
+    if (!profileForm.lastName.trim()) {
+      errors.lastName = 'Last name is required';
+    } else if (!/^[A-Za-z]+$/.test(profileForm.lastName.trim())) {
+      errors.lastName = 'Letters only, no spaces';
+    } else if (profileForm.lastName.trim().length < 2) {
+      errors.lastName = 'Last name must be at least 2 characters';
+    } else if (profileForm.lastName.trim().length > 10) {
+      errors.lastName = 'Last name must be less than 10 characters';
+    }
+
+    // Phone validation
+    if (profileForm.phone && profileForm.phone.trim() !== '') {
+      // Allow only exactly 10 digits
+      const phoneRegex = /^\d{10}$/;
+      if (!phoneRegex.test(profileForm.phone)) {
+        errors.phone = 'Phone number must be exactly 10 digits';
+      }
+    }
+
+    // Address validation
+    if (profileForm.address && profileForm.address.length > 80) {
+      errors.address = 'Address must be less than 80 characters';
     }
 
     setProfileErrors(errors);
@@ -375,7 +396,29 @@ const ProfilePage = () => {
                           fullWidth
                           label="First Name"
                           value={profileForm.firstName}
-                          onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Only allow alphabetic characters
+                            if (/^[A-Za-z]*$/.test(value) || value === '') {
+                              setProfileForm({ ...profileForm, firstName: value });
+                              // Real-time validation
+                              if (value.trim() === '') {
+                                setProfileErrors(prev => ({ ...prev, firstName: 'First name is required' }));
+                              } else if (!/^[A-Za-z]+$/.test(value)) {
+                                setProfileErrors(prev => ({ ...prev, firstName: 'Letters only, no spaces' }));
+                              } else if (value.trim().length < 2) {
+                                setProfileErrors(prev => ({ ...prev, firstName: 'First name must be at least 2 characters' }));
+                              } else if (value.trim().length > 10) {
+                                setProfileErrors(prev => ({ ...prev, firstName: 'First name must be less than 10 characters' }));
+                              } else {
+                                setProfileErrors(prev => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors.firstName;
+                                  return newErrors;
+                                });
+                              }
+                            }
+                          }}
                           disabled={!isEditingProfile}
                           error={!!profileErrors.firstName}
                           helperText={profileErrors.firstName}
@@ -386,7 +429,29 @@ const ProfilePage = () => {
                           fullWidth
                           label="Last Name"
                           value={profileForm.lastName}
-                          onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Only allow alphabetic characters
+                            if (/^[A-Za-z]*$/.test(value) || value === '') {
+                              setProfileForm({ ...profileForm, lastName: value });
+                              // Real-time validation
+                              if (value.trim() === '') {
+                                setProfileErrors(prev => ({ ...prev, lastName: 'Last name is required' }));
+                              } else if (!/^[A-Za-z]+$/.test(value)) {
+                                setProfileErrors(prev => ({ ...prev, lastName: 'Letters only, no spaces' }));
+                              } else if (value.trim().length < 2) {
+                                setProfileErrors(prev => ({ ...prev, lastName: 'Last name must be at least 2 characters' }));
+                              } else if (value.trim().length > 10) {
+                                setProfileErrors(prev => ({ ...prev, lastName: 'Last name must be less than 10 characters' }));
+                              } else {
+                                setProfileErrors(prev => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors.lastName;
+                                  return newErrors;
+                                });
+                              }
+                            }
+                          }}
                           disabled={!isEditingProfile}
                           error={!!profileErrors.lastName}
                           helperText={profileErrors.lastName}
@@ -406,7 +471,25 @@ const ProfilePage = () => {
                           fullWidth
                           label="Phone"
                           value={profileForm.phone}
-                          onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Only allow digits
+                            if (/^\d*$/.test(value) || value === '') {
+                              setProfileForm({ ...profileForm, phone: value });
+                              // Real-time validation
+                              if (value.trim() !== '' && !/^\d*$/.test(value)) {
+                                setProfileErrors(prev => ({ ...prev, phone: 'Phone number can only contain digits' }));
+                              } else if (value.trim() !== '' && value.length !== 10) {
+                                setProfileErrors(prev => ({ ...prev, phone: 'Phone number must be exactly 10 digits' }));
+                              } else {
+                                setProfileErrors(prev => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors.phone;
+                                  return newErrors;
+                                });
+                              }
+                            }
+                          }}
                           disabled={!isEditingProfile}
                           error={!!profileErrors.phone}
                           helperText={profileErrors.phone}
@@ -417,12 +500,28 @@ const ProfilePage = () => {
                           fullWidth
                           label="Address"
                           value={profileForm.address}
-                          onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Prevent exceeding character limit
+                            if (value.length <= 80) {
+                              setProfileForm({ ...profileForm, address: value });
+                              // Real-time validation
+                              if (value.length > 80) {
+                                setProfileErrors(prev => ({ ...prev, address: 'Address must be less than 80 characters' }));
+                              } else {
+                                setProfileErrors(prev => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors.address;
+                                  return newErrors;
+                                });
+                              }
+                            }
+                          }}
                           disabled={!isEditingProfile}
                           multiline
                           rows={3}
                           error={!!profileErrors.address}
-                          helperText={profileErrors.address}
+                          helperText={profileErrors.address || `${profileForm.address.length}/80 characters`}
                         />
                       </Grid>
                     </Grid>

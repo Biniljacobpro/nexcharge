@@ -20,6 +20,7 @@ import StationManagerPasswordReset from './pages/StationManagerPasswordReset';
 import StationDetails from './pages/StationDetails';
 import StationsPage from './pages/StationsPage';
 import BookingsPage from './pages/BookingsPage';
+import PaymentsPage from './pages/PaymentsPage';
 import ForgotPassword from './pages/ForgotPassword';
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
           <Route path="/stations" element={<StationsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/bookings" element={<BookingsPage />} />
+          <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/apply-corporate" element={<CorporateApplicationPage />} />
             <Route path="/corporate/dashboard" element={<CorporateDashboard />} />
             <Route path="/franchise/dashboard" element={<FranchiseOwnerDashboard />} />
