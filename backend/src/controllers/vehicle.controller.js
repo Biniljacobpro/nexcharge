@@ -128,6 +128,17 @@ export const createVehicle = async (req, res) => {
     await vehicle.populate('compatibleChargingStations', 'name location');
     await vehicle.populate('createdBy', 'personalInfo.firstName personalInfo.lastName');
 
+    // Create admin action notification
+    try {
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(userId, 'vehicle_added', {
+        make: vehicle.make,
+        model: vehicle.model
+      });
+    } catch (notificationError) {
+      console.error('Failed to create vehicle added notification:', notificationError);
+    }
+
     res.status(201).json({ success: true, message: 'Vehicle created successfully', data: vehicle });
   } catch (error) {
     console.error('Error creating vehicle:', error);
@@ -217,6 +228,7 @@ export const updateVehicle = async (req, res) => {
       });
     }
 
+    const oldVehicle = await Vehicle.findById(id);
     const updatedVehicle = await Vehicle.findByIdAndUpdate(
       id, 
       { ...req.body, updatedAt: new Date() }, 
@@ -224,6 +236,20 @@ export const updateVehicle = async (req, res) => {
     )
       .populate('compatibleChargingStations', 'name location')
       .populate('createdBy', 'personalInfo.firstName personalInfo.lastName');
+
+    // Create admin action notification if status changed
+    try {
+      if (oldVehicle && oldVehicle.isActive !== updatedVehicle.isActive) {
+        const { createAdminActionNotification } = await import('./notification.controller.js');
+        await createAdminActionNotification(userId, 'vehicle_status_changed', {
+          make: updatedVehicle.make,
+          model: updatedVehicle.model,
+          isActive: updatedVehicle.isActive
+        });
+      }
+    } catch (notificationError) {
+      console.error('Failed to create vehicle status change notification:', notificationError);
+    }
 
     res.json({ success: true, message: 'Vehicle updated successfully', data: updatedVehicle });
   } catch (error) {

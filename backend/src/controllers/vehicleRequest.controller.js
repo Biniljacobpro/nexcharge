@@ -54,6 +54,18 @@ export const createVehicleRequest = async (req, res) => {
     
     await vehicleRequest.save();
     
+    // Create admin action notification for the new vehicle request
+    try {
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(userId, 'vehicle_request_submitted', {
+        make: vehicleRequest.make,
+        model: vehicleRequest.model,
+        userEmail: vehicleRequest.userEmail
+      });
+    } catch (notificationError) {
+      console.error('Failed to create vehicle request notification:', notificationError);
+    }
+    
     res.status(201).json({ 
       success: true, 
       message: 'Vehicle request submitted successfully', 
@@ -127,12 +139,28 @@ export const updateVehicleRequestStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Vehicle request not found' });
     }
     
+    const oldStatus = vehicleRequest.status;
     vehicleRequest.status = status;
     if (notes !== undefined) {
       vehicleRequest.notes = notes;
     }
     
     await vehicleRequest.save();
+    
+    // Create admin action notification for status change
+    try {
+      const adminUserId = req.user.sub || req.user.id;
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(adminUserId, 'vehicle_request_status_changed', {
+        make: vehicleRequest.make,
+        model: vehicleRequest.model,
+        userEmail: vehicleRequest.userEmail,
+        oldStatus,
+        newStatus: status
+      });
+    } catch (notificationError) {
+      console.error('Failed to create vehicle request status change notification:', notificationError);
+    }
     
     res.json({ 
       success: true, 

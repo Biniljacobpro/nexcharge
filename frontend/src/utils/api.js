@@ -527,4 +527,36 @@ export const cancelBookingApi = async (bookingId, reason) => {
   return data;
 };
 
+// OTP and charging functions
+export const generateOTPApi = async (bookingId) => {
+  const res = await authFetch(`${API_BASE}/bookings/${bookingId}/generate-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to generate OTP');
+  return data;
+};
+
+export const verifyOTPApi = async (bookingId, otp) => {
+  const res = await authFetch(`${API_BASE}/bookings/${bookingId}/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to verify OTP');
+  return data;
+};
+
+export const stopChargingApi = async (bookingId) => {
+  const res = await authFetch(`${API_BASE}/bookings/${bookingId}/stop-charging`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to stop charging');
+  return data;
+};
+
 export default API_BASE;

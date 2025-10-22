@@ -35,7 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { getMe, getModelsByMakeApi, getCapacitiesByMakeModelApi, getMakesApi, getMyVehiclesApi, addUserVehicleApi, removeUserVehicleApi, updateUserVehicleAtIndexApi, updateBookingApi, cancelBookingApi } from '../utils/api';
+import { getMe, getModelsByMakeApi, getCapacitiesByMakeModelApi, getMakesApi, getMyVehiclesApi, addUserVehicleApi, removeUserVehicleApi, updateUserVehicleAtIndexApi, updateBookingApi, cancelBookingApi, generateOTPApi, verifyOTPApi, stopChargingApi } from '../utils/api';
 import UserNavbar from '../components/UserNavbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
@@ -60,6 +60,11 @@ const UserHomePage = () => {
   const [requestVehicleSuccess, setRequestVehicleSuccess] = useState('');
   const [myVehicles, setMyVehicles] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
+  
+  // OTP and charging state
+  const [otpInput, setOtpInput] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [chargingStatus, setChargingStatus] = useState({});
   
   // Vehicle makes for autocomplete (same as in admin module)
   const vehicleMakes = [
@@ -191,6 +196,62 @@ const UserHomePage = () => {
     navigate('/login');
   };
 
+  // OTP and charging functions
+  const handleGenerateOTP = async (bookingId) => {
+    try {
+      setOtpLoading(true);
+      await generateOTPApi(bookingId);
+      alert('OTP sent to your email! Check your inbox.');
+    } catch (error) {
+      alert(error.message || 'Failed to generate OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (bookingId, otp) => {
+    try {
+      setOtpLoading(true);
+      await verifyOTPApi(bookingId, otp);
+      setChargingStatus(prev => ({ ...prev, [bookingId]: 'started' }));
+      setOtpInput('');
+      alert('Charging started successfully!');
+      // Refresh bookings to update status
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+        const res = await fetch(`${apiBase}/bookings/my-bookings?limit=5&_=${Date.now()}` , { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+        const data = await res.json();
+        if (res.ok && data.success) setMyBookings(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (error) {
+      alert(error.message || 'Failed to verify OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleStopCharging = async (bookingId) => {
+    try {
+      setOtpLoading(true);
+      await stopChargingApi(bookingId);
+      setChargingStatus(prev => ({ ...prev, [bookingId]: 'stopped' }));
+      alert('Charging stopped successfully!');
+      // Refresh bookings to update status
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+        const res = await fetch(`${apiBase}/bookings/my-bookings?limit=5&_=${Date.now()}` , { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+        const data = await res.json();
+        if (res.ok && data.success) setMyBookings(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (error) {
+      alert(error.message || 'Failed to stop charging');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -257,6 +318,11 @@ const UserHomePage = () => {
                 const start = new Date(next.startTime);
                 const end = new Date(next.endTime);
                 const canCancel = (start.getTime() - Date.now()) >= 2*60*60*1000;
+                const isChargingStarted = chargingStatus[next._id] === 'started';
+                const isChargingStopped = chargingStatus[next._id] === 'stopped';
+                const timeToStart = Math.round((start.getTime() - now.getTime()) / (1000 * 60)); // minutes
+                const canStartCharging = timeToStart <= 5 && timeToStart >= -15; // 5 minutes before to 15 minutes after
+                
                 return (
                   <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
                     <Grid container spacing={2} alignItems="center">
@@ -266,9 +332,68 @@ const UserHomePage = () => {
                         <Typography variant="caption" color="text.secondary">
                           {start.toLocaleString()} → {end.toLocaleString()}
                         </Typography>
+                        
+                        {/* OTP Input Section */}
+                        {canStartCharging && !isChargingStopped && (
+                          <Box sx={{ mt: 2, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
+                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+                              {isChargingStarted ? '🔋 Charging Active' : '🔐 Enter OTP to Start Charging'}
+                            </Typography>
+                            
+                            {!isChargingStarted && (
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                                <TextField
+                                  size="small"
+                                  placeholder="6-digit OTP"
+                                  value={otpInput}
+                                  onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                  sx={{ width: 120 }}
+                                  disabled={otpLoading}
+                                />
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="primary"
+                                  disabled={otpInput.length !== 6 || otpLoading}
+                                  onClick={() => handleVerifyOTP(next._id, otpInput)}
+                                >
+                                  {otpLoading ? 'Verifying...' : 'Start'}
+                                </Button>
+                              </Box>
+                            )}
+                            
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleGenerateOTP(next._id)}
+                                disabled={otpLoading}
+                              >
+                                {otpLoading ? 'Sending...' : '📧 Get OTP'}
+                              </Button>
+                              
+                              {isChargingStarted && (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="error"
+                                  onClick={() => handleStopCharging(next._id)}
+                                  disabled={otpLoading}
+                                >
+                                  {otpLoading ? 'Stopping...' : '⏹️ Stop Charging'}
+                                </Button>
+                              )}
+                            </Box>
+                          </Box>
+                        )}
                       </Grid>
+                      
                       <Grid item xs={12} md={5} sx={{ display: 'flex', gap: 1, justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
-                        <Chip size="small" color="primary" label="upcoming" />
+                        <Chip 
+                          size="small" 
+                          color={isChargingStarted ? "success" : isChargingStopped ? "warning" : "primary"} 
+                          label={isChargingStarted ? "charging" : isChargingStopped ? "stopped" : "upcoming"} 
+                        />
                         <Button size="small" variant="outlined" onClick={() => {
                           setEditingBooking(next);
                           setEditForm({

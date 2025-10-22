@@ -29,6 +29,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './InteractiveMap.css';
 
+const DEFAULT_LOCATION = { lat: 20.5937, lng: 78.9629 };
+
 // Fix for default markers in Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -51,6 +53,7 @@ const InteractiveMap = ({ compact = false, height }) => {
   const [alertType, setAlertType] = useState('info');
   const [isLoading, setIsLoading] = useState(true);
   const [mapError, setMapError] = useState('');
+  const geolocationTimeoutRef = useRef(null);
 
   // Handle station navigation
   const handleStationNavigation = useRef((event) => {
@@ -59,32 +62,46 @@ const InteractiveMap = ({ compact = false, height }) => {
   });
 
   useEffect(() => {
-    // Get current location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setCurrentLocation({ lat: latitude, lng: longitude });
-          setAlertMessage('Location detected successfully!');
-          setAlertType('success');
-          setShowAlert(true);
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          // Default to a fallback location (e.g., city center)
-          setCurrentLocation({ lat: 40.7128, lng: -74.0060 }); // New York
-          setAlertMessage('Using default location. Enable location access for better experience.');
-          setAlertType('warning');
-          setShowAlert(true);
-        }
-      );
-    } else {
-      // Fallback location if geolocation is not supported
-      setCurrentLocation({ lat: 40.7128, lng: -74.0060 });
-      setAlertMessage('Location services not supported. Using default location.');
+    // Always start with a fast default to avoid prolonged loading
+    setCurrentLocation(DEFAULT_LOCATION);
+    setAlertMessage('Loading nearby stations for India. Enable location access for precise results.');
+    setAlertType('info');
+    setShowAlert(true);
+
+    if (!navigator.geolocation) {
+      setAlertMessage('Location services not supported. Using default view.');
       setAlertType('warning');
-      setShowAlert(true);
+      return;
     }
+
+    geolocationTimeoutRef.current = setTimeout(() => {
+      setAlertMessage('Unable to detect your location quickly. Showing default view.');
+      setAlertType('warning');
+    }, 5000);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (geolocationTimeoutRef.current) {
+          clearTimeout(geolocationTimeoutRef.current);
+        }
+        const { latitude, longitude } = position.coords;
+        setCurrentLocation({ lat: latitude, lng: longitude });
+        setAlertMessage('Location detected successfully!');
+        setAlertType('success');
+        setShowAlert(true);
+      },
+      (error) => {
+        console.error('Error getting location:', error);
+        setAlertMessage('Unable to access your location. Showing default stations.');
+        setAlertType('warning');
+      }
+    );
+
+    return () => {
+      if (geolocationTimeoutRef.current) {
+        clearTimeout(geolocationTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {

@@ -20,22 +20,26 @@ export const useNotifications = (refreshInterval = 60000) => {
   const fetchNotifications = useCallback(async (page = 1, limit = 20) => {
     try {
       setLoading(true);
+      console.log('Fetching notifications from:', `${API_BASE}/notifications?page=${page}&limit=${limit}`);
       const response = await fetch(`${API_BASE}/notifications?page=${page}&limit=${limit}`, {
         headers: getAuthHeaders()
       });
 
       const result = await response.json();
+      console.log('Notifications API response:', result);
       
       if (result.success) {
+        console.log(`Received ${result.data.notifications.length} notifications, unread count: ${result.data.unreadCount}`);
         setNotifications(result.data.notifications);
         setUnreadCount(result.data.unreadCount);
         setError(null);
       } else {
+        console.error('API returned error:', result.message);
         setError(result.message || 'Failed to fetch notifications');
       }
     } catch (err) {
+      console.error('Network error fetching notifications:', err);
       setError(err.message || 'Network error');
-      console.error('Error fetching notifications:', err);
     } finally {
       setLoading(false);
     }
@@ -44,17 +48,22 @@ export const useNotifications = (refreshInterval = 60000) => {
   // Fetch unread count only
   const fetchUnreadCount = useCallback(async () => {
     try {
+      console.log('Fetching unread count from:', `${API_BASE}/notifications/unread-count`);
       const response = await fetch(`${API_BASE}/notifications/unread-count`, {
         headers: getAuthHeaders()
       });
 
       const result = await response.json();
+      console.log('Unread count API response:', result);
       
       if (result.success) {
+        console.log('Updating unread count to:', result.data.unreadCount);
         setUnreadCount(result.data.unreadCount);
+      } else {
+        console.error('API returned error for unread count:', result.message);
       }
     } catch (err) {
-      console.error('Error fetching unread count:', err);
+      console.error('Network error fetching unread count:', err);
     }
   }, []);
 
@@ -149,6 +158,7 @@ export const useNotifications = (refreshInterval = 60000) => {
 
   // Initial fetch
   useEffect(() => {
+    console.log('Initial fetch of notifications');
     fetchNotifications();
   }, [fetchNotifications]);
 
@@ -156,8 +166,12 @@ export const useNotifications = (refreshInterval = 60000) => {
   useEffect(() => {
     if (!refreshInterval || refreshInterval <= 0) return;
 
+    console.log('Setting up interval for unread count updates');
     const interval = setInterval(fetchUnreadCount, refreshInterval);
-    return () => clearInterval(interval);
+    return () => {
+      console.log('Clearing interval');
+      clearInterval(interval);
+    };
   }, [fetchUnreadCount, refreshInterval]);
 
   return {

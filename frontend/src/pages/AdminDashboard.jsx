@@ -44,7 +44,6 @@ import {
 import {
   People as PeopleIcon,
   Settings as SettingsIcon,
-  Notifications as NotificationsIcon,
   Search as SearchIcon,
   PhotoCamera as PhotoCameraIcon,
   Home as HomeIcon,
@@ -69,6 +68,7 @@ import {
   Delete as DeleteIcon,
   RequestQuote as RequestQuoteIcon
 } from '@mui/icons-material';
+import NotificationDropdown from '../components/NotificationDropdown';
 import { useNavigate } from 'react-router-dom';
 import nexchargeLogo from '../assets/nexcharge-high-resolution-logo-transparent.png';
 import * as api from '../utils/api';
@@ -1328,10 +1328,12 @@ const AdminDashboard = () => {
     if (activeSection === 'vehicles' && activeVehicleTab === 'requests') {
       (async () => {
         const requests = await loadVehicleRequests();
-        setVehicleRequests(requests);
+        // Filter out requests with "added" status
+        const filteredRequests = requests.filter(r => r.status !== 'added');
+        setVehicleRequests(filteredRequests);
         
-        // Update pending requests count
-        const pendingCount = requests.filter(r => r.status === 'pending').length;
+        // Update pending count (only pending requests)
+        const pendingCount = filteredRequests.filter(r => r.status === 'pending').length;
         setPendingRequestsCount(pendingCount);
       })();
     }
@@ -1339,7 +1341,9 @@ const AdminDashboard = () => {
     if (activeSection === 'vehicles' && activeVehicleTab === 'vehicles') {
       (async () => {
         const requests = await loadVehicleRequests();
-        const pendingCount = requests.filter(r => r.status === 'pending').length;
+        // Filter out requests with "added" status
+        const filteredRequests = requests.filter(r => r.status !== 'added');
+        const pendingCount = filteredRequests.filter(r => r.status === 'pending').length;
         setPendingRequestsCount(pendingCount);
       })();
     }
@@ -1487,11 +1491,7 @@ const AdminDashboard = () => {
           </Box>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton>
-              <Badge badgeContent={3} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
+            <NotificationDropdown />
             <IconButton onClick={(e) => setUserMenuAnchor(e.currentTarget)}>
               <Avatar 
                 src={user?.profileImage || undefined}

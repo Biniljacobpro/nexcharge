@@ -596,3 +596,96 @@ export const sendBookingConfirmationEmail = async (booking, user, station) => {
     return false;
   }
 };
+
+// Send OTP email for charging verification
+export const sendOTPEmail = async (booking, user, station, otpCode) => {
+  try {
+    const transporter = await createTransporter();
+    
+    // Format dates for display
+    const startTime = new Date(booking.startTime);
+    const endTime = new Date(booking.endTime);
+    const formattedStartTime = startTime.toLocaleString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const formattedEndTime = endTime.toLocaleString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const mailOptions = {
+      from: `"NexCharge Team" <${process.env.EMAIL_USER || process.env.email_id}>`,
+      to: user.personalInfo.email,
+      subject: '🔐 Your Charging OTP - Start Your Session',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa;">
+          <div style="background: linear-gradient(135deg, #00b894, #00a085); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">🔐 Charging OTP</h1>
+            <p style="color: white; margin: 10px 0 0 0; font-size: 16px;">Your 6-digit verification code</p>
+          </div>
+          
+          <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #2d3436; margin-top: 0;">Hello ${user.personalInfo.firstName} ${user.personalInfo.lastName}!</h2>
+            
+            <p style="color: #636e72; line-height: 1.6; font-size: 16px;">
+              Your charging session at <strong>${station.name}</strong> is ready to start.
+            </p>
+            
+            <div style="background-color: #e8f5e8; border-left: 4px solid #00b894; padding: 20px; margin: 25px 0; border-radius: 5px;">
+              <h3 style="color: #2d3436; margin-top: 0;">📅 Session Details</h3>
+              <p style="margin: 10px 0;"><strong>Station:</strong> ${station.name}</p>
+              <p style="margin: 10px 0;"><strong>Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
+              <p style="margin: 10px 0;"><strong>Charger Type:</strong> ${booking.chargerType}</p>
+            </div>
+            
+            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 25px 0; border-radius: 5px;">
+              <h3 style="color: #2d3436; margin-top: 0;">🔐 Your OTP Code</h3>
+              <div style="text-align: center; margin: 20px 0;">
+                <div style="display: inline-block; background: #f1fff8; border: 3px solid #00b894; color: #00a085; font-weight: bold; font-size: 32px; letter-spacing: 6px; padding: 20px 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,184,148,0.2);">
+                  ${otpCode}
+                </div>
+              </div>
+              <p style="color: #e67e22; font-weight: bold; text-align: center; margin: 15px 0 0 0;">
+                ⏰ This code expires in 10 minutes
+              </p>
+            </div>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 25px;">
+              <h4 style="color: #2d3436; margin-top: 0;">🚗 How to Start Charging:</h4>
+              <ol style="color: #636e72; line-height: 1.8; padding-left: 20px;">
+                <li>Go to your booking in the NexCharge app</li>
+                <li>Enter the 6-digit OTP code above</li>
+                <li>Tap "Start Charging" to begin your session</li>
+                <li>Use "Stop Charging" when you're done</li>
+              </ol>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e9ecef;">
+              <p style="color: #636e72; font-size: 14px; text-align: center;">
+                Need help? Contact our support team at 
+                <a href="mailto:support@nexcharge.com" style="color: #00b894;">support@nexcharge.com</a>
+              </p>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 20px; color: #636e72; font-size: 12px;">
+            <p>© 2025 NexCharge. All rights reserved.</p>
+            <p>Powering the Future of EV Charging</p>
+          </div>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('OTP email sent successfully:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('Error sending OTP email:', error);
+    return false;
+  }
+};

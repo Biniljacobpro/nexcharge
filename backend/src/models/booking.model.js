@@ -109,6 +109,23 @@ const BookingSchema = new mongoose.Schema({
   checkedInAt: Date,
   checkedOutAt: Date,
   
+  // OTP for charging verification
+  otp: {
+    code: String,
+    generatedAt: Date,
+    expiresAt: Date,
+    verified: { type: Boolean, default: false }
+  },
+  
+  // Charging status
+  chargingStatus: {
+    type: String,
+    enum: ['not_started', 'started', 'stopped', 'completed'],
+    default: 'not_started'
+  },
+  chargingStartedAt: Date,
+  chargingStoppedAt: Date,
+  
   // Metadata
   createdAt: {
     type: Date,

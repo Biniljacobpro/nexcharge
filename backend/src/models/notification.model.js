@@ -22,7 +22,7 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['booking_confirmed', 'booking_cancelled', 'payment_success', 'payment_failed', 'booking_reminder', 'booking_completed', 'system', 'promotion'],
+    enum: ['booking_confirmed', 'booking_cancelled', 'payment_success', 'payment_failed', 'booking_reminder', 'booking_completed', 'system', 'promotion', 'admin_action', 'user_status_changed', 'corporate_admin_added', 'vehicle_added', 'station_status_changed', 'vehicle_request_submitted', 'vehicle_request_status_changed', 'franchise_owner_added'],
     required: true,
     index: true
   },
@@ -136,3 +136,7 @@ NotificationSchema.statics.getUnreadCount = async function(userId) {
 };
 
 export default mongoose.model('Notification', NotificationSchema);
+
+
+
+

@@ -234,4 +234,92 @@ export const createBookingNotification = async (userId, type, booking, station) 
   }
 };
 
+// Helper function to create admin action notifications
+export const createAdminActionNotification = async (adminUserId, type, details) => {
+  try {
+    let title, message, actionType = 'none', actionData = {}, priority = 'medium';
+
+    switch (type) {
+      case 'user_status_changed':
+        title = details.isActive ? '✅ User Activated' : '❌ User Deactivated';
+        message = `User ${details.userName} has been ${details.isActive ? 'activated' : 'deactivated'} by admin.`;
+        priority = 'medium';
+        break;
+
+      case 'corporate_admin_added':
+        title = '🏢 New Corporate Admin';
+        message = `New corporate admin ${details.adminName} has been added for ${details.companyName}.`;
+        priority = 'medium';
+        break;
+
+      case 'corporate_admin_status_changed':
+        title = details.isActive ? '✅ Corporate Admin Activated' : '❌ Corporate Admin Deactivated';
+        message = `Corporate admin ${details.adminName} has been ${details.isActive ? 'activated' : 'deactivated'}.`;
+        priority = 'medium';
+        break;
+
+      case 'vehicle_added':
+        title = '🚗 New Vehicle Added';
+        message = `New vehicle ${details.make} ${details.model} has been added to the catalog.`;
+        priority = 'low';
+        break;
+
+      case 'vehicle_status_changed':
+        title = details.isActive ? '✅ Vehicle Activated' : '❌ Vehicle Deactivated';
+        message = `Vehicle ${details.make} ${details.model} has been ${details.isActive ? 'activated' : 'deactivated'}.`;
+        priority = 'low';
+        break;
+
+      case 'station_status_changed':
+        title = '🔌 Station Status Updated';
+        message = `Station ${details.stationName} status has been updated to ${details.status}.`;
+        priority = 'medium';
+        break;
+        
+      case 'vehicle_request_submitted':
+        title = '.NewRequest for Vehicle';
+        message = `User ${details.userEmail} has requested to add ${details.make} ${details.model} to the vehicle catalog.`;
+        priority = 'low';
+        break;
+        
+      case 'vehicle_request_status_changed':
+        title = '🔄 Vehicle Request Status Updated';
+        message = `Vehicle request for ${details.make} ${details.model} has been updated from ${details.oldStatus} to ${details.newStatus}.`;
+        priority = 'low';
+        break;
+        
+      case 'franchise_owner_added':
+        title = '🏢 New Franchise Owner';
+        message = `New franchise owner ${details.ownerName} has been added for ${details.franchiseName}.`;
+        priority = 'medium';
+        break;
+
+      default:
+        throw new Error(`Unknown admin notification type: ${type}`);
+    }
+
+    return await createNotification({
+      userId: adminUserId,
+      title,
+      message,
+      type,
+      actionType,
+      actionData,
+      priority
+    });
+
+  } catch (error) {
+    console.error('Error creating admin action notification:', error);
+    throw error;
+  }
+};
+
+
+
+
+
+
+
+
+
 

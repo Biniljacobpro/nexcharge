@@ -185,6 +185,18 @@ export const updateStationStatus = async (req, res) => {
       { new: true }
     );
     if (!station) return res.status(404).json({ success: false, message: 'Station not found' });
+
+    // Create admin action notification
+    try {
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(req.user.sub || req.user.id, 'station_status_changed', {
+        stationName: station.name || 'Unknown Station',
+        status
+      });
+    } catch (notificationError) {
+      console.error('Failed to create station status change notification:', notificationError);
+    }
+
     return res.json({ success: true, data: { id: station._id, status: station.operational?.status } });
   } catch (e) {
     return res.status(500).json({ success: false, message: 'Failed to update status', error: e.message });
@@ -243,8 +255,20 @@ export const updateUserStatus = async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     user.credentials = user.credentials || {};
+    const oldStatus = user.credentials.isActive;
     user.credentials.isActive = isActive;
     await user.save();
+
+    // Create admin action notification
+    try {
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(req.user.sub || req.user.id, 'user_status_changed', {
+        userName: `${user.personalInfo?.firstName || ''} ${user.personalInfo?.lastName || ''}`.trim() || 'Unknown User',
+        isActive
+      });
+    } catch (notificationError) {
+      console.error('Failed to create user status change notification:', notificationError);
+    }
 
     return res.json({ success: true, user: {
       _id: user._id,
@@ -420,6 +444,17 @@ export const addCorporateAdmin = async (req, res) => {
 			console.log('Welcome email sent successfully');
 		}
 
+		// Create admin action notification
+		try {
+			const { createAdminActionNotification } = await import('./notification.controller.js');
+			await createAdminActionNotification(req.user.sub || req.user.id, 'corporate_admin_added', {
+				adminName: `${firstName} ${lastName}`.trim(),
+				companyName
+			});
+		} catch (notificationError) {
+			console.error('Failed to create corporate admin added notification:', notificationError);
+		}
+
 		res.status(201).json({
 			success: true,
 			message: 'Corporate admin added successfully',
@@ -455,8 +490,21 @@ export const updateCorporateAdminStatus = async (req, res) => {
       return res.status(400).json({ error: 'Only corporate admins can be updated with this endpoint' });
     }
 
+    const oldStatus = user.credentials.isActive;
     user.credentials.isActive = isActive;
     await user.save();
+
+    // Create admin action notification
+    try {
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(req.user.sub || req.user.id, 'corporate_admin_status_changed', {
+        adminName: `${user.personalInfo?.firstName || ''} ${user.personalInfo?.lastName || ''}`.trim() || 'Unknown Admin',
+        isActive,
+        companyName: user.roleSpecificData?.corporateAdminInfo?.corporateId?.name || 'Unknown Company'
+      });
+    } catch (notificationError) {
+      console.error('Failed to create corporate admin status change notification:', notificationError);
+    }
 
     return res.json({ success: true, user: {
       _id: user._id,

@@ -2,7 +2,7 @@ import Booking from '../models/booking.model.js';
 import Station from '../models/station.model.js';
 import User from '../models/user.model.js';
 import { createBookingNotification } from './notification.controller.js';
-import { sendBookingConfirmationEmail } from '../utils/emailService.js';
+import { sendBookingConfirmationEmail, sendOTPEmail } from '../utils/emailService.js';
 
 // Create a new booking
 export const createBooking = async (req, res) => {
@@ -899,6 +899,201 @@ export const getStationBookings = async (req, res) => {
 
   } catch (error) {
     console.error('Error getting station bookings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Generate and send OTP for booking
+export const generateOTP = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.sub || req.user.id;
+
+    const booking = await Booking.findOne({ _id: bookingId, userId })
+      .populate('userId', 'personalInfo.firstName personalInfo.lastName personalInfo.email')
+      .populate('stationId', 'name location');
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.status !== 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP can only be generated for confirmed bookings'
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes from now
+
+    // Update booking with OTP
+    booking.otp = {
+      code: otpCode,
+      generatedAt: now,
+      expiresAt: expiresAt,
+      verified: false
+    };
+    await booking.save();
+
+    // Send OTP email
+    try {
+      await sendOTPEmail(booking, booking.userId, booking.stationId, otpCode);
+    } catch (emailError) {
+      console.error('Error sending OTP email:', emailError);
+      // Don't fail the OTP generation if email fails
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP generated and sent to your email',
+      data: {
+        bookingId: booking._id,
+        expiresAt: expiresAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error generating OTP:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Verify OTP and start charging
+export const verifyOTPAndStartCharging = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { otp } = req.body;
+    const userId = req.user.sub || req.user.id;
+
+    if (!otp || otp.length !== 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid 6-digit OTP'
+      });
+    }
+
+    const booking = await Booking.findOne({ _id: bookingId, userId });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.status !== 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only confirmed bookings can start charging'
+      });
+    }
+
+    if (!booking.otp || !booking.otp.code) {
+      return res.status(400).json({
+        success: false,
+        message: 'No OTP found for this booking. Please generate OTP first.'
+      });
+    }
+
+    if (booking.otp.verified) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has already been used'
+      });
+    }
+
+    const now = new Date();
+    if (now > booking.otp.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please generate a new OTP.'
+      });
+    }
+
+    if (booking.otp.code !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP. Please check and try again.'
+      });
+    }
+
+    // Verify OTP and start charging
+    booking.otp.verified = true;
+    booking.status = 'active';
+    booking.chargingStatus = 'started';
+    booking.chargingStartedAt = now;
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully. Charging started!',
+      data: {
+        bookingId: booking._id,
+        chargingStartedAt: booking.chargingStartedAt,
+        status: booking.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Stop charging
+export const stopCharging = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.sub || req.user.id;
+
+    const booking = await Booking.findOne({ _id: bookingId, userId });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.chargingStatus !== 'started') {
+      return res.status(400).json({
+        success: false,
+        message: 'Charging is not currently active'
+      });
+    }
+
+    const now = new Date();
+    booking.chargingStatus = 'stopped';
+    booking.chargingStoppedAt = now;
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Charging stopped successfully',
+      data: {
+        bookingId: booking._id,
+        chargingStoppedAt: booking.chargingStoppedAt,
+        chargingStatus: booking.chargingStatus
+      }
+    });
+
+  } catch (error) {
+    console.error('Error stopping charging:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

@@ -52,6 +52,7 @@ import {
 } from '@mui/material';
 import corporateService from '../services/corporateService';
 import * as api from '../utils/api';
+import NotificationDropdown from '../components/NotificationDropdown';
 import {
   Dashboard as DashboardIcon,
   Business as BusinessIcon,
@@ -1655,11 +1656,7 @@ const CorporateDashboard = () => {
               }}
             />
             
-            <IconButton sx={{ mr: 1 }}>
-              <Badge badgeContent={3} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
+            <NotificationDropdown />
             
             <IconButton sx={{ mr: 1 }}>
               <SettingsIcon />

@@ -53,6 +53,17 @@ export const updateCorporateStationStatus = async (req, res) => {
     station.operational.status = status;
     await station.save();
 
+    // Create admin action notification
+    try {
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(req.user.sub || req.user.id, 'station_status_changed', {
+        stationName: station.name || 'Unknown Station',
+        status
+      });
+    } catch (notificationError) {
+      console.error('Failed to create station status change notification:', notificationError);
+    }
+
     return res.json({ success: true, message: 'Status updated', data: { id: station._id, status } });
   } catch (error) {
     console.error('Error updating corporate station status:', error);
@@ -376,6 +387,17 @@ export const addFranchiseOwner = async (req, res) => {
     } catch (mailError) {
       console.warn('sendFranchiseOwnerWelcomeEmail failed:', mailError?.message || mailError);
       // Do not fail the request if email fails
+    }
+
+    // Create admin action notification
+    try {
+      const { createAdminActionNotification } = await import('./notification.controller.js');
+      await createAdminActionNotification(req.user.sub || req.user.id, 'franchise_owner_added', {
+        ownerName: `${firstName} ${lastName}`.trim(),
+        franchiseName: franchiseName.trim()
+      });
+    } catch (notificationError) {
+      console.error('Failed to create franchise owner added notification:', notificationError);
     }
 
     res.status(201).json({

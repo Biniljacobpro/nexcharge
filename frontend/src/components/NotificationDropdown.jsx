@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   IconButton,
   Badge,
@@ -40,11 +40,19 @@ const NotificationDropdown = () => {
     loading,
     markAsRead,
     markAllAsRead,
-    deleteNotification
+    deleteNotification,
+    refresh
   } = useNotifications();
 
-  const handleClick = (event) => {
+  const handleClick = async (event) => {
     setAnchorEl(event.currentTarget);
+    console.log('Dropdown clicked, refreshing notifications');
+    try {
+      await refresh();
+      console.log('Notifications refresh completed');
+    } catch (error) {
+      console.error('Error refreshing notifications:', error);
+    }
   };
 
   const handleClose = () => {
@@ -188,101 +196,91 @@ const NotificationDropdown = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress size={24} />
           </Box>
-        ) : notifications.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
-            <NotificationsNoneIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              No notifications yet
-            </Typography>
-          </Box>
         ) : (
-          <List sx={{ p: 0, maxHeight: 300, overflow: 'auto' }}>
-            {notifications.slice(0, 10).map((notification) => (
-              <ListItem
-                key={notification._id}
-                button
-                onClick={() => handleNotificationClick(notification)}
-                sx={{
-                  py: 1.5,
-                  px: 2,
-                  backgroundColor: notification.isRead ? 'transparent' : 'rgba(25, 118, 210, 0.04)',
-                  borderLeft: notification.isRead ? 'none' : '3px solid #1976d2',
-                  '&:hover': {
-                    backgroundColor: 'rgba(0,0,0,0.04)'
-                  }
-                }}
-              >
-                <ListItemAvatar>
-                  <Avatar sx={{ width: 36, height: 36, bgcolor: 'transparent' }}>
-                    {getNotificationIcon(notification.type)}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={
-                    <Typography
-                      variant="subtitle2"
-                      sx={{
-                        fontWeight: notification.isRead ? 400 : 600,
-                        fontSize: '0.875rem',
-                        lineHeight: 1.3
-                      }}
-                    >
-                      {notification.title}
-                    </Typography>
-                  }
-                  secondary={
-                    <Box>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ fontSize: '0.8rem', mt: 0.5 }}
-                      >
-                        {notification.message}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontSize: '0.75rem', mt: 0.5, display: 'block' }}
-                      >
-                        {getTimeAgo(notification.createdAt)}
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <Tooltip title="Delete">
-                    <IconButton
-                      edge="end"
-                      size="small"
-                      onClick={(e) => handleDeleteNotification(notification._id, e)}
-                      sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        )}
-
-        {notifications.length > 0 && (
-          <>
-            <Divider />
-            <Box sx={{ p: 1 }}>
-              <Button
-                fullWidth
-                size="small"
-                onClick={() => {
-                  navigate('/bookings');
-                  handleClose();
-                }}
-                sx={{ textTransform: 'none' }}
-              >
-                View All Bookings
-              </Button>
+          <Box>
+            <Box sx={{ p: 1, textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary">
+                Showing {notifications.length} notifications, {unreadCount} unread
+              </Typography>
             </Box>
-          </>
+            {notifications.length === 0 ? (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <NotificationsNoneIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  No notifications yet
+                </Typography>
+              </Box>
+            ) : (
+              <List sx={{ p: 0, maxHeight: 300, overflow: 'auto' }}>
+                {notifications.slice(0, 10).map((notification) => (
+                  <ListItem
+                    key={notification._id}
+                    button
+                    onClick={() => handleNotificationClick(notification)}
+                    sx={{
+                      py: 1.5,
+                      px: 2,
+                      backgroundColor: notification.isRead ? 'transparent' : 'rgba(25, 118, 210, 0.04)',
+                      borderLeft: notification.isRead ? 'none' : '3px solid #1976d2',
+                      '&:hover': {
+                        backgroundColor: 'rgba(0,0,0,0.04)'
+                      }
+                    }}
+                  >
+                    <ListItemAvatar>
+                      <Avatar sx={{ width: 36, height: 36, bgcolor: 'transparent' }}>
+                        {getNotificationIcon(notification.type)}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            fontWeight: notification.isRead ? 400 : 600,
+                            fontSize: '0.875rem',
+                            lineHeight: 1.3
+                          }}
+                        >
+                          {notification.title}
+                        </Typography>
+                      }
+                      secondary={
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ fontSize: '0.8rem', mt: 0.5 }}
+                          >
+                            {notification.message}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontSize: '0.75rem', mt: 0.5, display: 'block' }}
+                          >
+                            {getTimeAgo(notification.createdAt)}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <Tooltip title="Delete">
+                        <IconButton
+                          edge="end"
+                          size="small"
+                          onClick={(e) => handleDeleteNotification(notification._id, e)}
+                          sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Box>
         )}
       </Menu>
     </>
