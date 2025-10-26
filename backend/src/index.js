@@ -39,14 +39,22 @@ for (const p of [backendEnv, projectRootEnv]) {
 const app = express();
 
 // CORS - Updated for Vercel deployment with support for both local and production
-let corsOrigin = process.env.CORS_ORIGIN || ['http://localhost:3000', 'https://nexcharge.vercel.app'];
+let corsOrigin = process.env.CORS_ORIGIN || ['http://localhost:3000'];
 // If CORS_ORIGIN is a comma-separated string, convert to array
 if (typeof corsOrigin === 'string' && corsOrigin.includes(',')) {
   corsOrigin = corsOrigin.split(',').map(origin => origin.trim());
 } else if (typeof corsOrigin === 'string') {
   corsOrigin = [corsOrigin];
 }
-app.use(cors({ origin: corsOrigin, credentials: true }));
+
+// Always allow the frontend Vercel domain
+corsOrigin.push('https://nexcharge.vercel.app');
+
+app.use(cors({ 
+  origin: corsOrigin, 
+  credentials: true,
+  optionsSuccessStatus: 200
+}));
 
 // Security & utils
 app.use(helmet({
