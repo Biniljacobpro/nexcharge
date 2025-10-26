@@ -9,6 +9,7 @@ import {
   Button,
   Avatar,
   Chip,
+  Divider,
   Paper,
   CircularProgress,
   Skeleton,
@@ -28,7 +29,9 @@ import {
   LocationOn as LocationIcon,
   Payment as PaymentIcon,
   History as HistoryIcon,
-  Notifications as NotificationsIcon
+  Notifications as NotificationsIcon,
+  Settings as SettingsIcon,
+  Logout as LogoutIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';

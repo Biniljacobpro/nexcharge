@@ -19,11 +19,11 @@ Create the following environment variables in your Vercel project settings:
 
 ```env
 # MongoDB Atlas Connection
-MONGODB_URI=your_mongodb_atlas_connection_string
+MONGODB_URI=mongodb+srv://biniljacob274:NcvxYsYAbvHLxsZZ@cluster0.83fbygj.mongodb.net/nexcharge?retryWrites=true&w=majority&appName=Cluster0
 
 # JWT Secret
-JWT_ACCESS_SECRET=your_jwt_access_secret
-JWT_REFRESH_SECRET=your_jwt_refresh_secret
+JWT_ACCESS_SECRET=8f1a2c79e5a4d6f9b72c9d1f8a2c3d7f6b8a9c1e4d7f2a9e1c6b4d8a7f9c0d1
+JWT_REFRESH_SECRET=f3c7e1a9b4d8c2f9a0e3b7c1d5f6a9b2c4e7f8d1a3c0e6b5d9f2a8c1b7e4f9a2
 JWT_ACCESS_TTL=20m
 JWT_REFRESH_TTL=7d
 
@@ -34,23 +34,23 @@ CORS_ORIGIN=https://nexcharge.vercel.app
 PORT=3000
 
 # Firebase Configuration
-FIREBASE_PROJECT_ID=your_firebase_project_id
-FIREBASE_CLIENT_EMAIL=your_firebase_client_email
-FIREBASE_PRIVATE_KEY=your_firebase_private_key
+FIREBASE_PROJECT_ID=nexcharge-fe3d4
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@nexcharge-fe3d4.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n(your private key here)\n-----END PRIVATE KEY-----\n"
 
 # Email Configuration
-EMAIL_USER=your_email_user
-EMAIL_APP_PASSWORD=your_email_app_password
+EMAIL_USER=biniljacob274@gmail.com
+EMAIL_APP_PASSWORD=yhkg lobl ivtb gcjz
 
 # Razorpay Configuration
-RAZORPAY_KEY_ID=your_razorpay_key_id
-RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+RAZORPAY_KEY_ID=rzp_test_RGXWGOBliVCIpU
+RAZORPAY_KEY_SECRET=9Q49llzcN0kLD3021OoSstOp
 
 # Cloudinary Configuration
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-CLOUDINARY_URL=your_cloudinary_url
+CLOUDINARY_CLOUD_NAME=dzc2lma5w
+CLOUDINARY_API_KEY=321938326249945
+CLOUDINARY_API_SECRET=joBijmJE0-19ikSCb_MgyDZ9iOM
+CLOUDINARY_URL=cloudinary://321938326249945:joBijmJE0-19ikSCb_MgyDZ9iOM@dzc2lma5w
 ```
 
 ### Frontend Environment Variables (.env.production)
@@ -60,15 +60,15 @@ CLOUDINARY_URL=your_cloudinary_url
 REACT_APP_API_BASE=https://nexcharge-qu9o.vercel.app
 
 # Firebase Configuration
-REACT_APP_FIREBASE_API_KEY=your_firebase_api_key
-REACT_APP_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
-REACT_APP_FIREBASE_PROJECT_ID=your_firebase_project_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_firebase_messaging_sender_id
-REACT_APP_FIREBASE_APP_ID=your_firebase_app_id
+REACT_APP_FIREBASE_API_KEY=AIzaSyCPcSXZHUSLU1qgPFrdPjx1NfBxqtj-VNs
+REACT_APP_FIREBASE_AUTH_DOMAIN=nexcharge-fe3d4.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=nexcharge-fe3d4
+REACT_APP_FIREBASE_STORAGE_BUCKET=nexcharge-fe3d4.firebasestorage.app
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=33548488430
+REACT_APP_FIREBASE_APP_ID=1:33548488430:web:bda58cb7bdbfcdc697edff
 
 # Google Maps API Key
-REACT_APP_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+REACT_APP_GOOGLE_MAPS_API_KEY=AIzaSyC7lDedDdpcUGJVQz3Hhm4MWrqdyGndu_M
 ```
 
 ## Deployment Steps
@@ -83,7 +83,7 @@ REACT_APP_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
    - Root Directory: backend
    - Build Command: `npm install`
    - Output Directory: `.`
-5. Add environment variables in the "Environment Variables" section using the values from your [backend/.env](file:///d:/ajce_projects/NexCharge/backend/.env) file
+5. Add environment variables in the "Environment Variables" section
 6. Deploy the project
 
 ### 2. Frontend Deployment (Vercel Static Site)
@@ -96,14 +96,28 @@ REACT_APP_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
    - Root Directory: frontend
    - Build Command: `npm run build`
    - Output Directory: `build`
-5. Add environment variables in the "Environment Variables" section using the values from your [frontend/.env](file:///d:/ajce_projects/NexCharge/frontend/.env) file
+5. Add environment variables in the "Environment Variables" section
 6. Deploy the project
 
 ## Local Development Configuration
 
 ### Backend Local Development
 
-1. Ensure your [backend/.env](file:///d:/ajce_projects/NexCharge/backend/.env) file contains your local configuration
+1. Create a `.env` file in the `backend` directory with your local configuration:
+   ```env
+   MONGODB_URI=mongodb+srv://biniljacob274:NcvxYsYAbvHLxsZZ@cluster0.83fbygj.mongodb.net/nexcharge?retryWrites=true&w=majority&appName=Cluster0
+   JWT_ACCESS_SECRET=8f1a2c79e5a4d6f9b72c9d1f8a2c3d7f6b8a9c1e4d7f2a9e1c6b4d8a7f9c0d1
+   JWT_REFRESH_SECRET=f3c7e1a9b4d8c2f9a0e3b7c1d5f6a9b2c4e7f8d1a3c0e6b5d9f2a8c1b7e4f9a2
+   JWT_ACCESS_TTL=20m
+   JWT_REFRESH_TTL=7d
+   CORS_ORIGIN=http://localhost:3000
+   CLOUDINARY_CLOUD_NAME=dzc2lma5w
+   CLOUDINARY_API_KEY=321938326249945
+   CLOUDINARY_API_SECRET=joBijmJE0-19ikSCb_MgyDZ9iOM
+   RAZORPAY_KEY_ID=rzp_test_RGXWGOBliVCIpU
+   RAZORPAY_KEY_SECRET=9Q49llzcN0kLD3021OoSstOp
+   ```
+
 2. Run the backend:
    ```bash
    cd backend
@@ -113,10 +127,18 @@ REACT_APP_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 
 ### Frontend Local Development
 
-1. Ensure your [frontend/.env](file:///d:/ajce_projects/NexCharge/frontend/.env) file contains:
+1. Create a `.env` file in the `frontend` directory:
    ```env
    REACT_APP_API_BASE=http://localhost:4000
+   REACT_APP_FIREBASE_API_KEY=AIzaSyCPcSXZHUSLU1qgPFrdPjx1NfBxqtj-VNs
+   REACT_APP_FIREBASE_AUTH_DOMAIN=nexcharge-fe3d4.firebaseapp.com
+   REACT_APP_FIREBASE_PROJECT_ID=nexcharge-fe3d4
+   REACT_APP_FIREBASE_STORAGE_BUCKET=nexcharge-fe3d4.firebasestorage.app
+   REACT_APP_FIREBASE_MESSAGING_SENDER_ID=33548488430
+   REACT_APP_FIREBASE_APP_ID=1:33548488430:web:bda58cb7bdbfcdc697edff
+   REACT_APP_GOOGLE_MAPS_API_KEY=AIzaSyC7lDedDdpcUGJVQz3Hhm4MWrqdyGndu_M
    ```
+
 2. Run the frontend:
    ```bash
    cd frontend
@@ -126,11 +148,13 @@ REACT_APP_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 
 ## Domain Configuration
 
-Your applications are hosted at:
-- Frontend: https://nexcharge.vercel.app
-- Backend: https://nexcharge-qu9o.vercel.app
+### Custom Domains
 
-The CORS configuration in the backend has been set to allow requests from both localhost (for development) and your production frontend domain.
+1. In your Vercel dashboard, go to your project settings
+2. Navigate to the "Domains" section
+3. Add your custom domain
+4. Update your DNS records as instructed by Vercel
+5. Update the CORS_ORIGIN environment variable to include your custom domain
 
 ## Troubleshooting
 

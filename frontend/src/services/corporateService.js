@@ -191,5 +191,5 @@ class CorporateService {
   }
 }
 
-const corporateService = new CorporateService();
-export default corporateService;
+export default new CorporateService();
+
