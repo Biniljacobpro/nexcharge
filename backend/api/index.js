@@ -3,6 +3,27 @@ import mongoose from 'mongoose';
 
 // Vercel serverless function handler
 export default async function handler(request, response) {
+  // Set CORS headers explicitly for all requests
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://nexcharge.vercel.app'
+  ];
+  
+  const origin = request.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    response.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  response.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (request.method === 'OPTIONS') {
+    response.status(200).end();
+    return;
+  }
+  
   // Connect to MongoDB if not already connected
   if (mongoose.connection.readyState !== 1) {
     try {
