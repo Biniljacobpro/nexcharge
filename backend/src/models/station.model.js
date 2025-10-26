@@ -273,6 +273,16 @@ const StationSchema = new mongoose.Schema({
     uploadedAt: { type: Date, default: Date.now }
   }],
 
+  // Predictive Maintenance Fields
+  latestRiskClassification: {
+    type: String,
+    enum: ['Low', 'Medium', 'High'],
+    default: 'Low'
+  },
+  lastPredictionDate: {
+    type: Date
+  },
+
   // Metadata
   metadata: { 
     type: Object,

@@ -86,14 +86,14 @@ import {
   AttachMoney as MoneyIcon,
   Settings,
   ExpandMore as ExpandMoreIcon,
-  BatteryChargingFull,
-  PhotoCamera as PhotoCameraIcon
+  BatteryChargingFull
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import GoogleMapsLocationPicker from '../components/GoogleMapsLocationPicker';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import stationManagerService from '../services/stationManagerService';
+import StationPhotosModal from '../components/StationPhotosModal';
 import Footer from '../components/Footer';
 
 const drawerWidth = 280;
@@ -102,6 +102,7 @@ const navigationItems = [
   { id: 'overview', label: 'Station Dashboard', icon: <DashboardIcon />, description: 'Real-time slot occupancy and operational status' },
   { id: 'bookings', label: 'Booking Management', icon: <BookingIcon />, description: 'Approve, monitor, or cancel reservations' },
   { id: 'maintenance', label: 'Maintenance Scheduling', icon: <MaintenanceIcon />, description: 'Block slots during repairs' },
+  { id: 'maintenance-predictions', label: 'Predictive Maintenance', icon: <MaintenanceIcon />, description: 'View maintenance risk predictions' },
   { id: 'pricing', label: 'Pricing & Offers', icon: <PricingIcon />, description: 'Set station-level pricing and promotions' },
   { id: 'reports', label: 'Performance Reports', icon: <ReportsIcon />, description: 'Utilization rates, uptime, and user ratings' },
   { id: 'feedback', label: 'Feedback Management', icon: <FeedbackIcon />, description: 'View and respond to customer reviews' },
@@ -119,6 +120,7 @@ const StationManagerDashboard = () => {
   
   // Station management state
   const [stationDialog, setStationDialog] = useState({ open: false, mode: 'view', station: null });
+  const [photosModal, setPhotosModal] = useState({ open: false, station: null });
   const [stationForm, setStationForm] = useState({
     // Basic Station Info
     name: '',
@@ -162,7 +164,7 @@ const StationManagerDashboard = () => {
   const [stationLoading, setStationLoading] = useState(false);
   const [availableManagers, setAvailableManagers] = useState([]);
   const [managersLoading, setManagersLoading] = useState(false);
-  const [imageUploadLoading, setImageUploadLoading] = useState({});
+
   
   const navigate = useNavigate();
 
@@ -199,6 +201,30 @@ const StationManagerDashboard = () => {
     }
   };
 
+  const handleStationStatusChange = async (stationId, newStatus) => {
+    try {
+      await stationManagerService.updateStationDetails(stationId, {
+        'operational.status': newStatus
+      });
+      
+      setSnackbar({ 
+        open: true, 
+        message: `Station status updated to ${newStatus}`, 
+        severity: 'success' 
+      });
+      
+      // Refresh dashboard data
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error updating station status:', error);
+      setSnackbar({ 
+        open: true, 
+        message: error.message || 'Failed to update station status', 
+        severity: 'error' 
+      });
+    }
+  };
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
@@ -212,125 +238,147 @@ const StationManagerDashboard = () => {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
     localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('jwt');
     navigate('/login');
   };
 
+  // Placeholder functions to prevent runtime errors
   const handleViewBooking = (booking) => {
-    // TODO: Implement booking view dialog
     console.log('View booking:', booking);
   };
 
-  const handleEditBooking = (booking) => {
-    // TODO: Implement booking edit dialog
-    console.log('Edit booking:', booking);
+  const handleApproveBooking = (bookingId) => {
+    console.log('Approve booking:', bookingId);
   };
 
-  const handleApproveBooking = async (bookingId) => {
-    try {
-      // TODO: Implement approve booking API call
-      console.log('Approve booking:', bookingId);
-      setSnackbar({ open: true, message: 'Booking approved successfully', severity: 'success' });
-      loadDashboardData();
-    } catch (error) {
-      console.error('Error approving booking:', error);
-      setSnackbar({ open: true, message: 'Failed to approve booking', severity: 'error' });
-    }
-  };
-
-  const handleCancelBooking = async (bookingId) => {
-    try {
-      // TODO: Implement cancel booking API call
-      console.log('Cancel booking:', bookingId);
-      setSnackbar({ open: true, message: 'Booking cancelled successfully', severity: 'success' });
-      loadDashboardData();
-    } catch (error) {
-      console.error('Error cancelling booking:', error);
-      setSnackbar({ open: true, message: 'Failed to cancel booking', severity: 'error' });
-    }
-  };
-
-  const handleScheduleMaintenance = () => {
-    // TODO: Implement schedule maintenance dialog
-    console.log('Schedule maintenance');
+  const handleCancelBooking = (bookingId) => {
+    console.log('Cancel booking:', bookingId);
   };
 
   const handleEditMaintenance = (maintenanceId) => {
-    // TODO: Implement edit maintenance dialog
     console.log('Edit maintenance:', maintenanceId);
   };
 
-  const handleCancelMaintenance = async (maintenanceId) => {
-    try {
-      // TODO: Implement cancel maintenance API call
-      console.log('Cancel maintenance:', maintenanceId);
-      setSnackbar({ open: true, message: 'Maintenance cancelled successfully', severity: 'success' });
-      loadDashboardData();
-    } catch (error) {
-      console.error('Error cancelling maintenance:', error);
-      setSnackbar({ open: true, message: 'Failed to cancel maintenance', severity: 'error' });
-    }
+  const handleCancelMaintenance = (maintenanceId) => {
+    console.log('Cancel maintenance:', maintenanceId);
+  };
+
+  const handleScheduleMaintenance = () => {
+    console.log('Schedule maintenance');
   };
 
   const handleUpdatePricing = (stationId) => {
-    // TODO: Implement update pricing dialog
     console.log('Update pricing for station:', stationId);
   };
 
   const handleCreatePromotion = () => {
-    // TODO: Implement create promotion dialog
     console.log('Create promotion');
   };
 
   const handleBulkUpdatePricing = () => {
-    // TODO: Implement bulk update pricing dialog
     console.log('Bulk update pricing');
   };
 
-  const handleViewFeedback = (feedbackId) => {
-    // TODO: Implement feedback view dialog
-    console.log('View feedback details:', feedbackId);
+  const handleSectionChange = (section) => {
+    setActiveSection(section);
+    setMobileOpen(false);
+  };
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setSnackbar({ open: false });
+  };
+
+  const handleStationDialogOpen = (mode, station = null) => {
+    setStationDialog({ open: true, mode, station });
+  };
+
+  const handleStationDialogClose = () => {
+    setStationDialog({ open: false, mode: 'view', station: null });
+  };
+
+  const handlePhotosModalOpen = (station) => {
+    setPhotosModal({ open: true, station });
+  };
+
+  const handlePhotosModalClose = () => {
+    setPhotosModal({ open: false, station: null });
+  };
+
+  const handleStationFormChange = (event) => {
+    const { name, value } = event.target;
+    setStationForm((prevForm) => ({
+      ...prevForm,
+      [name]: value
+    }));
+  };
+
+  const handleStationFormSubmit = async () => {
+    try {
+      setStationLoading(true);
+      if (stationDialog.mode === 'add') {
+        await stationManagerService.addStation(stationForm);
+        setSnackbar({ open: true, message: 'Station added successfully', severity: 'success' });
+      } else if (stationDialog.mode === 'edit') {
+        await stationManagerService.updateStationDetails(stationDialog.station._id, stationForm);
+        setSnackbar({ open: true, message: 'Station updated successfully', severity: 'success' });
+      }
+      handleStationDialogClose();
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error submitting station form:', error);
+      setSnackbar({ open: true, message: error.message || 'Failed to submit station form', severity: 'error' });
+    } finally {
+      setStationLoading(false);
+    }
+  };
+
+  const handleDeleteStation = async (stationId) => {
+    try {
+      await stationManagerService.deleteStation(stationId);
+      setSnackbar({ open: true, message: 'Station deleted successfully', severity: 'success' });
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error deleting station:', error);
+      setSnackbar({ open: true, message: error.message || 'Failed to delete station', severity: 'error' });
+    }
+  };
+
+  const handleLoadManagers = async () => {
+    try {
+      setManagersLoading(true);
+      const response = await stationManagerService.getAvailableManagers();
+      setAvailableManagers(response.data);
+    } catch (error) {
+      console.error('Error loading managers:', error);
+      setSnackbar({ open: true, message: error.message || 'Failed to load managers', severity: 'error' });
+    } finally {
+      setManagersLoading(false);
+    }
+  };
+
+  const handleAssignManager = async (stationId, managerId) => {
+    try {
+      await stationManagerService.assignManager(stationId, managerId);
+      setSnackbar({ open: true, message: 'Manager assigned successfully', severity: 'success' });
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error assigning manager:', error);
+      setSnackbar({ open: true, message: error.message || 'Failed to assign manager', severity: 'error' });
+    }
   };
 
   // Station management functions
   const handleViewStation = (station) => {
-    const loc = station.location || {};
-    const cap = station.capacity || {};
-    const pricing = station.pricing || {};
-    const op = station.operational || {};
-    const contact = station.contact || {};
-    setStationForm({
-      name: station.name || '',
-      code: station.code || '',
-      description: station.description || '',
-      address: loc.address || station.address || '',
-      city: loc.city || station.city || '',
-      state: loc.state || station.state || '',
-      country: loc.country || station.country || 'India',
-      pincode: loc.pincode || station.pincode || '',
-      locationDms: (loc.dms || station.locationDms || ''),
-      latitude: loc.latitude ?? station.latitude ?? '',
-      longitude: loc.longitude ?? station.longitude ?? '',
-      nearbyLandmarks: loc.nearbyLandmarks || station.nearbyLandmarks || '',
-      totalChargers: cap.totalChargers ?? station.totalChargers ?? 1,
-      chargerTypes: cap.chargerTypes || station.chargerTypes || [],
-      maxPowerPerCharger: cap.maxPowerPerCharger ?? station.maxPowerPerCharger ?? '',
-      totalPowerCapacity: cap.totalPowerCapacity ?? station.totalPowerCapacity ?? '',
-      // Backward compatibility: fall back to legacy basePrice if present
-      pricePerMinute: pricing.pricePerMinute ?? pricing.basePrice ?? station.pricePerMinute ?? station.basePrice ?? '',
-      cancellationPolicy: pricing.cancellationPolicy || station.cancellationPolicy || '',
-      openingHours: op.openingHours || station.openingHours || '24/7',
-      customHours: op.customHours || station.customHours || { start: '00:00', end: '23:59' },
-      is24Hours: op.is24Hours !== undefined ? op.is24Hours : (station.is24Hours !== undefined ? station.is24Hours : true),
-      status: op.status || station.status || 'active',
-      parkingSlots: op.parkingSlots ?? station.parkingSlots ?? 1,
-      parkingFee: op.parkingFee ?? station.parkingFee ?? '',
-      supportPhone: contact.supportPhone || station.supportPhone || '',
-      supportEmail: contact.supportEmail || station.supportEmail || '',
-      managerEmail: station.manager?.email || station.contact?.managerEmail || ''
-    });
-    setStationDialog({ open: true, mode: 'view', station });
+    // Ensure we're passing a valid station object
+    if (station && station._id) {
+      setPhotosModal({ open: true, station });
+    }
   };
 
   const handleEditStation = (station) => {
@@ -479,30 +527,6 @@ const StationManagerDashboard = () => {
     }
   };
 
-  const handleImageUpload = async (event, stationId) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    
-    try {
-      setImageUploadLoading(prev => ({ ...prev, [stationId]: true }));
-      
-      const res = await stationManagerService.uploadStationImages(stationId, files);
-      if (!res.success) throw new Error(res.message || 'Failed to upload images');
-      
-      setSnackbar({ open: true, message: 'Images uploaded successfully', severity: 'success' });
-      
-      // Refresh dashboard data to show updated images
-      await loadDashboardData();
-    } catch (error) {
-      console.error('Error uploading images:', error);
-      setSnackbar({ open: true, message: error.message || 'Failed to upload images', severity: 'error' });
-    } finally {
-      setImageUploadLoading(prev => ({ ...prev, [stationId]: false }));
-      // Reset the file input
-      event.target.value = '';
-    }
-  };
-
   const renderOverview = () => (
     <Box>
       <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
@@ -597,7 +621,7 @@ const StationManagerDashboard = () => {
 
       {/* Assigned Stations Information */}
       <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <Card>
               <CardContent>
@@ -629,11 +653,29 @@ const StationManagerDashboard = () => {
                           ({station.code})
                         </Typography>
                       </Box>
-                      <Chip 
-                        label={station.status} 
-                        color={station.status === 'active' ? 'success' : 'warning'} 
-                        size="small" 
-                      />
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Chip 
+                          label={station.operational?.status || 'inactive'} 
+                          color={
+                            station.operational?.status === 'active' ? 'success' : 
+                            station.operational?.status === 'maintenance' ? 'warning' : 'error'
+                          } 
+                          size="small" 
+                        />
+                        <FormControl size="small" sx={{ minWidth: 120 }}>
+                          <InputLabel id={`station-status-label-${station.id}`}>Status</InputLabel>
+                          <Select
+                            labelId={`station-status-label-${station.id}`}
+                            value={station.operational?.status || 'inactive'}
+                            label="Status"
+                            onChange={(e) => handleStationStatusChange(station.id, e.target.value)}
+                          >
+                            <SelectMenuItem value="active">Active</SelectMenuItem>
+                            <SelectMenuItem value="maintenance">Maintenance</SelectMenuItem>
+                            <SelectMenuItem value="inactive">Inactive</SelectMenuItem>
+                          </Select>
+                        </FormControl>
+                      </Box>
                     </Box>
 
                     {/* Station Description */}
@@ -753,24 +795,6 @@ const StationManagerDashboard = () => {
                     <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
                       <Button 
                         variant="outlined" 
-                        startIcon={<PhotoCameraIcon />} 
-                        component="label"
-                        disabled={imageUploadLoading[station.id]}
-                      >
-                        {imageUploadLoading[station.id] ? 'Uploading...' : 'Upload Images'}
-                        <input 
-                          type="file" 
-                          hidden 
-                          multiple 
-                          accept="image/*" 
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleImageUpload(e, station.id);
-                          }}
-                        />
-                      </Button>
-                      <Button 
-                        variant="outlined" 
                         startIcon={<EditIcon />} 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -784,10 +808,10 @@ const StationManagerDashboard = () => {
                         startIcon={<ViewIcon />} 
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/station-manager/stations/${station.id}`);
+                          setPhotosModal({ open: true, station });
                         }}
                       >
-                        View Details
+                        View Photos
                       </Button>
                     </Box>
                   </Box>
@@ -801,28 +825,7 @@ const StationManagerDashboard = () => {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={4}>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
-                  Quick Actions
-                </Typography>
-                <Box display="flex" flexDirection="column" gap={2}>
-                  <Button variant="outlined" startIcon={<BookingIcon />} fullWidth>
-                    View Bookings
-                  </Button>
-                  <Button variant="outlined" startIcon={<MaintenanceIcon />} fullWidth>
-                    Schedule Maintenance
-                  </Button>
-                  <Button variant="outlined" startIcon={<PricingIcon />} fullWidth>
-                    Update Pricing
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
+
       </Grid>
     </Box>
   );
@@ -1085,7 +1088,7 @@ const StationManagerDashboard = () => {
                               <Button 
                                 size="small" 
                                 startIcon={<ViewIcon />}
-                                onClick={() => handleViewMaintenance(maintenance)}
+                                onClick={() => console.log('View maintenance:', maintenance)}
                                 variant="outlined"
                               >
                                 View
@@ -1160,12 +1163,11 @@ const StationManagerDashboard = () => {
                               size="small" 
                             />
                           </TableCell>
-                          <TableCell>₹{booking.totalCost}</TableCell>
                           <TableCell>
                             <Button 
                               size="small" 
                               startIcon={<ViewIcon />}
-                              onClick={() => handleViewBooking(booking)}
+                              onClick={() => console.log('View maintenance:', maintenance)}
                             >
                               View
                             </Button>
@@ -1285,6 +1287,110 @@ const StationManagerDashboard = () => {
                           </TableCell>
                         </TableRow>
                       )) || []}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          </Box>
+        );
+      case 'maintenance-predictions':
+        return (
+          <Box>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
+              Predictive Maintenance
+            </Typography>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
+              View maintenance risk predictions for your stations
+            </Typography>
+            
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Stations Requiring Attention</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Stations with Medium or High maintenance risk predictions
+                </Typography>
+                
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Station</TableCell>
+                        <TableCell>Code</TableCell>
+                        <TableCell>Risk Level</TableCell>
+                        <TableCell>Last Prediction</TableCell>
+                        <TableCell>Location</TableCell>
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {dashboardData?.maintenancePredictions?.map((station) => (
+                        <TableRow key={station.id}>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="medium">
+                              {station.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">
+                              {station.code}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={station.latestRiskClassification}
+                              color={
+                                station.latestRiskClassification === 'High' ? 'error' : 
+                                station.latestRiskClassification === 'Medium' ? 'warning' : 'success'
+                              } 
+                              size="small" 
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {station.lastPredictionDate ? new Date(station.lastPredictionDate).toLocaleDateString() : 'N/A'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">
+                              {station.location?.city}, {station.location?.state}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Box display="flex" gap={1}>
+                              <Button 
+                                size="small" 
+                                startIcon={<ViewIcon />}
+                                variant="outlined"
+                                onClick={() => navigate(`/station-manager/stations/${station.id}`)}
+                              >
+                                View Details
+                              </Button>
+                              <Button 
+                                size="small" 
+                                startIcon={<MaintenanceIcon />}
+                                variant="contained"
+                                color="primary"
+                                onClick={() => {
+                                  // Navigate to maintenance scheduling for this station
+                                  setActiveSection('maintenance');
+                                  // TODO: Pass station ID to maintenance section
+                                }}
+                              >
+                                Schedule
+                              </Button>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )) || (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center">
+                            <Typography variant="body2" color="text.secondary">
+                              No stations with medium or high maintenance risk predictions
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -1607,7 +1713,7 @@ const StationManagerDashboard = () => {
                       <Button 
                         size="small" 
                         startIcon={<EditIcon />}
-                        onClick={() => handleRespondToFeedback(feedback.id)}
+                        onClick={() => console.log('Respond to feedback:', feedback.id)}
                         variant="contained"
                         color="primary"
                       >
@@ -1616,7 +1722,7 @@ const StationManagerDashboard = () => {
                       <Button 
                         size="small" 
                         startIcon={<ViewIcon />}
-                        onClick={() => handleViewFeedbackDetails(feedback.id)}
+                        onClick={() => console.log('View feedback details:', feedback.id)}
                         variant="outlined"
                       >
                         View Details
@@ -2236,6 +2342,14 @@ const StationManagerDashboard = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+      
+      <StationPhotosModal 
+        open={photosModal.open}
+        onClose={() => setPhotosModal({ open: false, station: null })}
+        station={photosModal.station}
+        onRefresh={loadDashboardData}
+      />
+
     </Box>
   );
 };

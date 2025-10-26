@@ -12,7 +12,8 @@
     "test:email": "node test-email.js",
     "check:env": "node check-env.js",
     "lint": "echo 'no linter configured'",
-    "update:reviews": "node src/scripts/updateStationReviews.js"
+    "update:reviews": "node src/scripts/updateStationReviews.js",
+    "test:maintenance": "node src/scripts/testMaintenancePrediction.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -29,6 +30,7 @@
     "helmet": "^7.0.0",
     "joi": "^17.12.0",
     "jsonwebtoken": "^9.0.2",
+    "ml-knn": "^3.0.0",
     "mongoose": "^8.5.1",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",

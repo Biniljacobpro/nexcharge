@@ -36,3 +36,9 @@ export const enforcePasswordChange = async (req, res, next) => {
 	}
 };
 
+// Admin only middleware
+export const adminOnly = requireRole('admin');
+
+// Station manager only middleware
+export const stationManagerOnly = requireRole('station_manager');
+

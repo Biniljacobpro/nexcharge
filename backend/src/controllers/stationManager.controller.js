@@ -132,6 +132,17 @@ export const getDashboardData = async (req, res) => {
       }
     ];
 
+    // Get maintenance predictions for assigned stations
+    const maintenancePredictions = await Station.find({
+      _id: { $in: stationIds },
+      latestRiskClassification: { $in: ['Medium', 'High'] }
+    })
+    .sort({
+      latestRiskClassification: -1, // High first, then Medium
+      lastPredictionDate: 1         // Oldest predictions first
+    })
+    .select('_id name code latestRiskClassification lastPredictionDate location');
+
     res.json({
       success: true,
       data: {
@@ -197,6 +208,14 @@ export const getDashboardData = async (req, res) => {
           vehicleModel: booking.vehicleInfo?.model || ''
         })),
         maintenanceSchedule,
+        maintenancePredictions: maintenancePredictions.map(station => ({
+          id: station._id,
+          name: station.name,
+          code: station.code,
+          latestRiskClassification: station.latestRiskClassification,
+          lastPredictionDate: station.lastPredictionDate,
+          location: station.location
+        })),
         performanceMetrics: {
           utilizationRate: parseFloat(utilizationRate),
           averageRating: 4.3, // Mock average rating
@@ -227,7 +246,10 @@ export const deleteStationImage = async (req, res) => {
 
     const user = await User.findById(userId);
     const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
-    if (!assigned.map(String).includes(String(id))) {
+    // Convert both to strings for comparison
+    const assignedIds = assigned.map(String);
+    const stationId = String(id);
+    if (!assignedIds.includes(stationId)) {
       return res.status(403).json({ success: false, message: 'Access denied to this station' });
     }
 
@@ -462,7 +484,10 @@ export const getStationDetails = async (req, res) => {
 
     const user = await User.findById(userId);
     const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
-    if (!assigned.map(String).includes(String(id))) {
+    // Convert both to strings for comparison
+    const assignedIds = assigned.map(String);
+    const stationId = String(id);
+    if (!assignedIds.includes(stationId)) {
       return res.status(403).json({ success: false, message: 'Access denied to this station' });
     }
 
@@ -489,7 +514,10 @@ export const updateStationDetails = async (req, res) => {
 
     const user = await User.findById(userId);
     const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
-    if (!assigned.map(String).includes(String(id))) {
+    // Convert both to strings for comparison
+    const assignedIds = assigned.map(String);
+    const stationId = String(id);
+    if (!assignedIds.includes(stationId)) {
       return res.status(403).json({ success: false, message: 'Access denied to this station' });
     }
 
@@ -542,7 +570,10 @@ export const uploadStationImages = async (req, res) => {
 
     const user = await User.findById(userId);
     const assigned = user?.roleSpecificData?.stationManagerInfo?.assignedStations || [];
-    if (!assigned.map(String).includes(String(id))) {
+    // Convert both to strings for comparison
+    const assignedIds = assigned.map(String);
+    const stationId = String(id);
+    if (!assignedIds.includes(stationId)) {
       return res.status(403).json({ success: false, message: 'Access denied to this station' });
     }
 

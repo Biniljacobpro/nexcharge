@@ -22,6 +22,8 @@ import notificationRoutes from './routes/notification.routes.js';
 import reviewRoutes from './routes/review.routes.js';
 import uploadRoutes from '../routes/uploadExample.js';
 import { startBookingReminderJob } from './jobs/bookingReminder.job.js';
+import maintenanceRoutes from './routes/maintenance.routes.js';
+import { startMaintenanceJob } from './jobs/maintenanceScheduler.js';
 // Removed deprecated corporate application routes
 
 // Ensure env is loaded from backend/.env or projectRoot/.env
@@ -76,6 +78,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes);
 // app.use('/api/corporates', corporateApplicationRoutes); // deprecated
+app.use('/api/station-manager', maintenanceRoutes);
 
 // Error handler
 // eslint-disable-next-line no-unused-vars
@@ -97,6 +100,9 @@ const PORT = process.env.PORT || 4000;
 		
 		// Start the booking reminder job
 		startBookingReminderJob();
+		
+		// Start the maintenance prediction job
+		startMaintenanceJob();
 		
 		app.listen(PORT, () => console.log(`API listening on :${PORT}`));
 	} catch (e) {

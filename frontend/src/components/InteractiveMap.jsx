@@ -179,14 +179,24 @@ const InteractiveMap = ({ compact = false, height }) => {
                 lng = s.lng || s.longitude || 0;
               }
               
+              // Calculate available slots from chargers array if available
+              let availableSlots = s.availableSlots ?? s.capacity?.availableSlots ?? 0;
+              let totalChargers = s.capacity?.totalChargers ?? 0;
+              
+              // If we have chargers array, calculate available slots from it
+              if (s.capacity?.chargers && Array.isArray(s.capacity.chargers)) {
+                totalChargers = s.capacity.chargers.length;
+                availableSlots = s.capacity.chargers.filter(charger => charger.isAvailable).length;
+              }
+              
               return {
                 id: s.id || s._id || `station-${index}`,
                 name: s.name || 'Unknown Station',
                 lat: parseFloat(lat) || 0,
                 lng: parseFloat(lng) || 0,
                 type: (Array.isArray(s.capacity?.chargerTypes) && s.capacity.chargerTypes.length > 0) ? s.capacity.chargerTypes[0] : 'Various',
-                available: s.availableSlots ?? s.capacity?.availableSlots ?? 0,
-                total: s.capacity?.totalChargers ?? 0,
+                available: availableSlots,
+                total: totalChargers,
                 pricePerMinute: (s.pricing?.pricePerMinute ?? s.pricing?.basePrice ?? 0),
                 status: s.operational?.status || 'active',
                 rating: s.analytics?.rating ?? 0, // Use actual rating from analytics with nullish coalescing

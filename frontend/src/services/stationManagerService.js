@@ -124,6 +124,21 @@ export const stationManagerService = {
       throw new Error(error.message || 'Failed to delete image');
     }
     return await response.json();
+  },
+
+  // Get maintenance predictions
+  getMaintenancePredictions: async () => {
+    try {
+      const response = await authFetch(`${API_BASE}/station-manager/maintenance-predictions`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || 'Failed to fetch maintenance predictions');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching maintenance predictions:', error);
+      throw error;
+    }
   }
 };
 
