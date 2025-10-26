@@ -51,8 +51,7 @@ const StationsPage = () => {
 
   useEffect(() => { 
     loadStations(); // initial load
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadStations]);
 
   // Add this useEffect to trigger search when search term changes
   useEffect(() => {

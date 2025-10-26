@@ -40,8 +40,6 @@ const StationManagerStationDetails = () => {
   const [station, setStation] = useState(null);
   const [imagesUploading, setImagesUploading] = useState(false);
   const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
-  const API_ORIGIN = API_BASE.replace(/\/api$/,'');
-
 
   const loadDetails = async () => {
     try {
