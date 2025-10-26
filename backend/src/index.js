@@ -47,14 +47,41 @@ if (typeof corsOrigin === 'string' && corsOrigin.includes(',')) {
   corsOrigin = [corsOrigin];
 }
 
-// Always allow the frontend Vercel domain
+// Always allow the frontend Vercel domains
 corsOrigin.push('https://nexcharge.vercel.app');
+corsOrigin.push('https://nexcharge-qu9o.vercel.app');
 
 app.use(cors({ 
   origin: corsOrigin, 
   credentials: true,
   optionsSuccessStatus: 200
 }));
+
+// Add explicit CORS headers middleware
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://nexcharge.vercel.app',
+    'https://nexcharge-qu9o.vercel.app'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
 
 // Security & utils
 app.use(helmet({
