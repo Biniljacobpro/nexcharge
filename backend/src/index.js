@@ -57,6 +57,9 @@ if (!corsOrigin.includes('https://nexcharge.vercel.app')) {
   corsOrigin.push('https://nexcharge.vercel.app');
 }
 
+// Log CORS configuration for debugging
+console.log('CORS Origins:', corsOrigin);
+
 app.use(cors({ 
   origin: corsOrigin, 
   credentials: true,

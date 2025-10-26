@@ -1,8 +1,15 @@
-import app from '../src/index.js';
-import mongoose from 'mongoose';
-
 // Vercel serverless function handler
 export default async function handler(request, response) {
+  // Log incoming request for debugging
+  console.log('Incoming request:', {
+    method: request.method,
+    url: request.url,
+    headers: {
+      origin: request.headers.origin,
+      'content-type': request.headers['content-type']
+    }
+  });
+  
   // Set CORS headers explicitly for all requests
   const allowedOrigins = [
     'http://localhost:3000',
@@ -10,8 +17,13 @@ export default async function handler(request, response) {
   ];
   
   const origin = request.headers.origin;
+  console.log('Request origin:', origin);
+  
   if (allowedOrigins.includes(origin)) {
     response.setHeader('Access-Control-Allow-Origin', origin);
+    console.log('Set CORS header for origin:', origin);
+  } else {
+    console.log('Origin not allowed:', origin);
   }
   
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -20,6 +32,7 @@ export default async function handler(request, response) {
   
   // Handle preflight requests
   if (request.method === 'OPTIONS') {
+    console.log('Handling preflight OPTIONS request');
     response.status(200).end();
     return;
   }
