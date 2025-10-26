@@ -1,3 +1,6 @@
+import app from '../src/index.js';
+import mongoose from 'mongoose';
+
 // Vercel serverless function handler
 export default async function handler(request, response) {
   // Log incoming request for debugging
