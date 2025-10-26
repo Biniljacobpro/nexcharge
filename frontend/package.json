@@ -4,22 +4,22 @@
   "description": "NexCharge - EV Charging Management System Frontend",
   "private": true,
   "dependencies": {
-    "@emotion/react": "^11.11.1",
-    "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.14.19",
-    "@mui/material": "^5.14.20",
-    "@mui/x-date-pickers": "^8.11.3",
+    "@emotion/react": "^11.13.5",
+    "@emotion/styled": "^11.13.5",
+    "@mui/icons-material": "^6.2.0",
+    "@mui/material": "^6.2.0",
+    "@mui/x-date-pickers": "^7.23.3",
     "@react-google-maps/api": "^2.20.7",
     "date-fns": "^4.1.0",
-    "firebase": "^10.12.2",
-    "framer-motion": "^10.16.16",
+    "firebase": "^11.0.2",
+    "framer-motion": "^11.15.0",
     "leaflet": "^1.9.4",
     "lottie-react": "^2.4.0",
     "razorpay": "^2.9.6",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
-    "react-router-dom": "^6.20.1",
+    "react-router-dom": "^7.0.2",
     "react-scripts": "5.0.1",
     "recharts": "^2.15.4"
   },
@@ -31,7 +31,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
-    "test:e2e:run-and-report": "playwright test && playwright show-report"
+    "test:e2e:run-and-report": "playwright test && playwright show-report",
+    "audit": "npm audit fix"
   },
   "eslintConfig": {
     "extends": [
