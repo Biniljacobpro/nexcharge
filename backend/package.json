@@ -6,8 +6,9 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "vercel-build": "echo 'Building for Vercel'",
     "seed:admin": "node src/scripts/seedAdmin.js",
     "test:email": "node test-email.js",
     "check:env": "node check-env.js",
@@ -45,5 +46,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }

@@ -21,10 +21,7 @@ import availabilityRoutes from './routes/availability.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import reviewRoutes from './routes/review.routes.js';
 import uploadRoutes from '../routes/uploadExample.js';
-import { startBookingReminderJob } from './jobs/bookingReminder.job.js';
 import maintenanceRoutes from './routes/maintenance.routes.js';
-import { startMaintenanceJob } from './jobs/maintenanceScheduler.js';
-// Removed deprecated corporate application routes
 
 // Ensure env is loaded from backend/.env or projectRoot/.env
 const backendEnv = path.resolve(process.cwd(), '.env');
@@ -41,8 +38,14 @@ for (const p of [backendEnv, projectRootEnv]) {
 
 const app = express();
 
-// CORS
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+// CORS - Updated for Vercel deployment with support for both local and production
+let corsOrigin = process.env.CORS_ORIGIN || ['http://localhost:3000', 'https://nexcharge.vercel.app'];
+// If CORS_ORIGIN is a comma-separated string, convert to array
+if (typeof corsOrigin === 'string' && corsOrigin.includes(',')) {
+  corsOrigin = corsOrigin.split(',').map(origin => origin.trim());
+} else if (typeof corsOrigin === 'string') {
+  corsOrigin = [corsOrigin];
+}
 app.use(cors({ origin: corsOrigin, credentials: true }));
 
 // Security & utils
@@ -51,16 +54,17 @@ app.use(helmet({
  // This prevents ERR_BLOCKED_BY_RESPONSE.NotSameOrigin caused by CORP
  crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(morgan('dev'));
 
 // Serve static files (uploads)
 app.use('/uploads', express.static('uploads'));
 
-// Health
+// Health check endpoint
 app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/', (_req, res) => res.json({ message: 'NexCharge API is running!' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -77,7 +81,6 @@ app.use('/api/availability', availabilityRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes);
-// app.use('/api/corporates', corporateApplicationRoutes); // deprecated
 app.use('/api/station-manager', maintenanceRoutes);
 
 // Error handler
@@ -88,25 +91,5 @@ app.use((err, _req, res, _next) => {
 	res.status(status).json({ error: err.message || 'Internal Server Error' });
 });
 
-// DB & server
-const PORT = process.env.PORT || 4000;
-(async () => {
-	try {
-		if (!process.env.MONGODB_URI) {
-			throw new Error('MONGODB_URI is not set. Please add it to backend/.env or project root .env');
-		}
-		await mongoose.connect(process.env.MONGODB_URI);
-		console.log('MongoDB connected');
-		
-		// Start the booking reminder job
-		startBookingReminderJob();
-		
-		// Start the maintenance prediction job
-		startMaintenanceJob();
-		
-		app.listen(PORT, () => console.log(`API listening on :${PORT}`));
-	} catch (e) {
-		console.error('Failed to start server', e);
-		process.exit(1);
-	}
-})();
+// Export for Vercel serverless functions
+export default app;
