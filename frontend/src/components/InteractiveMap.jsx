@@ -29,7 +29,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './InteractiveMap.css';
 
-const DEFAULT_LOCATION = { lat: 20.5937, lng: 78.9629 };
+const DEFAULT_LOCATION = { lat: 20.5937, lng: 78.9629 }; // Center of India
 
 // Fix for default markers in Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -54,6 +54,8 @@ const InteractiveMap = ({ compact = false, height }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [mapError, setMapError] = useState('');
   const geolocationTimeoutRef = useRef(null);
+  const currentMarkerRef = useRef(null);
+  const stationMarkersRef = useRef([]);
 
   // Handle station navigation
   const handleStationNavigation = useRef((event) => {
@@ -62,7 +64,7 @@ const InteractiveMap = ({ compact = false, height }) => {
   });
 
   useEffect(() => {
-    // Always start with a fast default to avoid prolonged loading
+    // Start with default location
     setCurrentLocation(DEFAULT_LOCATION);
     setAlertMessage('Loading nearby stations for India. Enable location access for precise results.');
     setAlertType('info');
@@ -85,15 +87,26 @@ const InteractiveMap = ({ compact = false, height }) => {
           clearTimeout(geolocationTimeoutRef.current);
         }
         const { latitude, longitude } = position.coords;
-        setCurrentLocation({ lat: latitude, lng: longitude });
+        const userLocation = { lat: latitude, lng: longitude };
+        setCurrentLocation(userLocation);
         setAlertMessage('Location detected successfully!');
         setAlertType('success');
         setShowAlert(true);
+        
+        // Update map view to user's location
+        if (map) {
+          map.setView([latitude, longitude], 13);
+        }
       },
       (error) => {
         console.error('Error getting location:', error);
         setAlertMessage('Unable to access your location. Showing default stations.');
         setAlertType('warning');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000
       }
     );
 
@@ -110,12 +123,12 @@ const InteractiveMap = ({ compact = false, height }) => {
         setIsLoading(true);
         setMapError('');
 
-        // Ensure the container is free from a previous Leaflet instance (fixes "Map container is being reused")
+        // Ensure the container is free from a previous Leaflet instance
         if (mapRef.current && mapRef.current._leaflet_id) {
           try { mapRef.current._leaflet_id = null; } catch (_) {}
         }
 
-        // Initialize map
+        // Initialize map with current location as center
         const newMap = L.map(mapRef.current).setView([currentLocation.lat, currentLocation.lng], 13);
         
         // Add OpenStreetMap tiles
@@ -124,45 +137,90 @@ const InteractiveMap = ({ compact = false, height }) => {
         }).addTo(newMap);
 
         // Add current location marker
-        const currentMarker = L.marker([currentLocation.lat, currentLocation.lng])
-          .addTo(newMap)
-          .bindPopup('<b>Your Location</b><br>You are here')
-          .openPopup();
-
-        // Custom icon for current location
         const currentLocationIcon = L.divIcon({
           className: 'custom-current-location',
           html: '<div style="background-color: #00D4AA; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>',
           iconSize: [20, 20],
           iconAnchor: [10, 10]
         });
-        currentMarker.setIcon(currentLocationIcon);
+        
+        const currentMarker = L.marker([currentLocation.lat, currentLocation.lng], { icon: currentLocationIcon })
+          .addTo(newMap)
+          .bindPopup('<b>Your Location</b><br>You are here')
+          .openPopup();
+          
+        currentMarkerRef.current = currentMarker;
 
-        // Fetch real stations from backend (public endpoint)
+        // Fetch real stations from backend
         const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
         fetch(`${apiBase}/public/stations`)
           .then(async (res) => {
             if (!res.ok) throw new Error(`Failed to load stations: ${res.status}`);
             const body = await res.json();
-            const stations = (body?.data || []).map((s, index) => ({
-              id: s.id || s._id || `station-${index}`,
-              name: s.name || 'Unknown Station',
-              lat: s.location?.coordinates?.latitude || s.lat || 0,
-              lng: s.location?.coordinates?.longitude || s.lng || 0,
-              type: (Array.isArray(s.capacity?.chargerTypes) && s.capacity.chargerTypes.length > 0) ? s.capacity.chargerTypes[0] : 'Various',
-              available: s.availableSlots ?? s.capacity?.availableSlots ?? 0,
-              total: s.capacity?.totalChargers ?? 0,
-              pricePerMinute: (s.pricing?.pricePerMinute ?? s.pricing?.basePrice ?? 0),
-              status: s.operational?.status || 'active',
-              rating: 4.5,
-              amenities: s.amenities || []
-            }));
+            const stations = (body?.data || []).map((s, index) => {
+              // Extract coordinates properly
+              let lat = 0;
+              let lng = 0;
+              
+              // Handle different coordinate formats
+              if (s.location?.coordinates) {
+                if (Array.isArray(s.location.coordinates)) {
+                  // [longitude, latitude] format (GeoJSON)
+                  lng = s.location.coordinates[0];
+                  lat = s.location.coordinates[1];
+                } else if (typeof s.location.coordinates === 'object') {
+                  // { latitude, longitude } format
+                  lat = s.location.coordinates.latitude || s.location.coordinates.lat || 0;
+                  lng = s.location.coordinates.longitude || s.location.coordinates.lng || 0;
+                }
+              } else {
+                // Fallback to direct properties
+                lat = s.lat || s.latitude || 0;
+                lng = s.lng || s.longitude || 0;
+              }
+              
+              return {
+                id: s.id || s._id || `station-${index}`,
+                name: s.name || 'Unknown Station',
+                lat: parseFloat(lat) || 0,
+                lng: parseFloat(lng) || 0,
+                type: (Array.isArray(s.capacity?.chargerTypes) && s.capacity.chargerTypes.length > 0) ? s.capacity.chargerTypes[0] : 'Various',
+                available: s.availableSlots ?? s.capacity?.availableSlots ?? 0,
+                total: s.capacity?.totalChargers ?? 0,
+                pricePerMinute: (s.pricing?.pricePerMinute ?? s.pricing?.basePrice ?? 0),
+                status: s.operational?.status || 'active',
+                rating: s.analytics?.rating ?? 0, // Use actual rating from analytics with nullish coalescing
+                amenities: s.amenities || []
+              };
+            });
 
             setNearbyStations(stations);
             setFilteredStations(stations);
 
+            // Clear existing station markers
+            stationMarkersRef.current.forEach(marker => {
+              try {
+                newMap.removeLayer(marker);
+              } catch (e) {
+                console.warn('Failed to remove marker:', e);
+              }
+            });
+            stationMarkersRef.current = [];
+
             // Add charging station markers
             stations.forEach((station) => {
+              // Skip stations with invalid coordinates
+              if (!station.lat || !station.lng || (station.lat === 0 && station.lng === 0)) {
+                console.warn('Skipping station with invalid coordinates:', station.name);
+                return;
+              }
+              
+              // Validate coordinate ranges
+              if (station.lat < -90 || station.lat > 90 || station.lng < -180 || station.lng > 180) {
+                console.warn('Skipping station with out-of-range coordinates:', station.name, station.lat, station.lng);
+                return;
+              }
+              
               // Blue for available, red for full, orange for maintenance
               const color = station.status === 'maintenance'
                 ? '#f59e0b'
@@ -227,56 +285,18 @@ const InteractiveMap = ({ compact = false, height }) => {
               marker.on('click', () => {
                 newMap.setView([station.lat, station.lng], 16);
               });
+              
+              // Store reference to marker
+              stationMarkersRef.current.push(marker);
             });
           })
           .catch((err) => {
             console.error('Failed loading stations:', err);
+            setAlertMessage('Failed to load charging stations. Please try again later.');
+            setAlertType('error');
           });
 
-        // Note: station markers are added after fetch resolves
-        // Current location marker already added above
-        
-        // Add charging station markers (none here; handled after fetch)
-        /* stations.forEach((station) => {
-          const stationIcon = L.divIcon({
-            className: 'custom-station-marker',
-            html: `<div style="background-color: ${station.available > 0 ? '#2563eb' : '#dc2626'}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.3);"></div>`,
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
-          });
-
-          const marker = L.marker([station.lat, station.lng], { icon: stationIcon })
-            .addTo(newMap)
-            .bindPopup(`
-              <div style="min-width: 250px;">
-                <h4 style="margin: 0 0 8px 0; color: #1f2937;">${station.name}</h4>
-                <p style="margin: 4px 0; color: #6b7280;">
-                  <strong>Type:</strong> ${station.type}
-                </p>
-                <p style="margin: 4px 0; color: #6b7280;">
-                  <strong>Available:</strong> ${station.available}/${station.total} slots
-                </p>
-                <p style="margin: 4px 0; color: #6b7280;">
-                  <strong>Price:</strong> ₹${station.price}/kWh
-                </p>
-                <p style="margin: 4px 0; color: #6b7280;">
-                  <strong>Rating:</strong> ⭐ ${station.rating}/5
-                </p>
-                <div style="margin-top: 8px;">
-                  <span style="background-color: ${station.available > 0 ? '#10b981' : '#dc2626'}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">
-                    ${station.available > 0 ? 'Available' : 'Full'}
-                  </span>
-                </div>
-              </div>
-            `);
-
-          // Add click event to center map on station
-          marker.on('click', () => {
-            newMap.setView([station.lat, station.lng], 16);
-          });
-        }); */
-
-        // Add event listener for station navigation (capture handler for cleanup)
+        // Add event listener for station navigation
         const navHandler = handleStationNavigation.current;
         window.addEventListener('navigateToStation', navHandler);
 
@@ -289,6 +309,30 @@ const InteractiveMap = ({ compact = false, height }) => {
       }
     }
 
+    // Update map when currentLocation changes
+    if (map && currentLocation) {
+      map.setView([currentLocation.lat, currentLocation.lng], 13);
+      
+      // Update or create current location marker
+      if (currentMarkerRef.current) {
+        currentMarkerRef.current.setLatLng([currentLocation.lat, currentLocation.lng]);
+      } else {
+        const currentLocationIcon = L.divIcon({
+          className: 'custom-current-location',
+          html: '<div style="background-color: #00D4AA; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+        
+        const currentMarker = L.marker([currentLocation.lat, currentLocation.lng], { icon: currentLocationIcon })
+          .addTo(map)
+          .bindPopup('<b>Your Location</b><br>You are here')
+          .openPopup();
+          
+        currentMarkerRef.current = currentMarker;
+      }
+    }
+
     return () => {
       if (map) {
         try { map.remove(); } catch (_) {}
@@ -296,7 +340,10 @@ const InteractiveMap = ({ compact = false, height }) => {
       // Clean up event listener
       const navHandler = handleStationNavigation.current;
       window.removeEventListener('navigateToStation', navHandler);
-      // Also clear any Leaflet id tag on the container to prevent reuse errors
+      // Clear marker references
+      currentMarkerRef.current = null;
+      stationMarkersRef.current = [];
+      // Clear Leaflet id tag
       if (mapRef.current && mapRef.current._leaflet_id) {
         try { mapRef.current._leaflet_id = null; } catch (_) {}
       }
@@ -336,6 +383,11 @@ const InteractiveMap = ({ compact = false, height }) => {
       setAlertMessage('Centered on your location!');
       setAlertType('info');
       setShowAlert(true);
+      
+      // Open popup for current location marker
+      if (currentMarkerRef.current) {
+        currentMarkerRef.current.openPopup();
+      }
     }
   };
 
@@ -495,7 +547,7 @@ const InteractiveMap = ({ compact = false, height }) => {
                       );
                     })()}
                     <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem', mt: 0.5 }}>
-                      ⭐ {station.rating}/5
+                      ⭐ {(typeof station.rating === 'number' && !isNaN(station.rating) ? station.rating.toFixed(1) : '0.0')}/5
                     </Typography>
                     <Button 
                       variant="contained" 
@@ -539,4 +591,3 @@ const InteractiveMap = ({ compact = false, height }) => {
 };
 
 export default InteractiveMap;
-

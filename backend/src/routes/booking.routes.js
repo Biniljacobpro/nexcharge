@@ -15,6 +15,7 @@ import {
 
 const router = Router();
 
+
 // All booking routes require authentication
 router.use(requireAuth);
 

@@ -9,10 +9,13 @@ export const useRealTimeAvailability = (stationIds, refreshInterval = 30000) => 
   const [error, setError] = useState(null);
 
   const fetchAvailability = useCallback(async () => {
+    // Only fetch if we have station IDs
     if (!stationIds || stationIds.length === 0) return;
 
     try {
       setLoading(true);
+      console.log(`Fetching availability for ${stationIds.length} stations at ${new Date().toLocaleTimeString()}`);
+      
       const response = await fetch(`${API_BASE}/availability/stations`, {
         method: 'POST',
         headers: {
@@ -35,7 +38,7 @@ export const useRealTimeAvailability = (stationIds, refreshInterval = 30000) => 
     } finally {
       setLoading(false);
     }
-  }, [stationIds]);
+  }, [JSON.stringify(stationIds)]); // Stringify to properly compare arrays
 
   // Initial fetch
   useEffect(() => {
@@ -44,10 +47,17 @@ export const useRealTimeAvailability = (stationIds, refreshInterval = 30000) => 
 
   // Set up interval for real-time updates
   useEffect(() => {
+    // Don't set up interval if refreshInterval is not valid
     if (!refreshInterval || refreshInterval <= 0) return;
 
+    console.log(`Setting up availability refresh interval: ${refreshInterval}ms`);
     const interval = setInterval(fetchAvailability, refreshInterval);
-    return () => clearInterval(interval);
+    
+    // Cleanup function
+    return () => {
+      console.log('Clearing availability refresh interval');
+      clearInterval(interval);
+    };
   }, [fetchAvailability, refreshInterval]);
 
   // Manual refresh function

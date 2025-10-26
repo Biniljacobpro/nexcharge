@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getMe, getMyVehiclesApi } from '../utils/api';
 import { useSingleStationAvailability } from '../hooks/useRealTimeAvailability';
@@ -24,24 +24,22 @@ import {
   Card,
   CardContent,
   Avatar,
-  Divider,
   Stack,
-  Rating
+  Rating,
+  IconButton
 } from '@mui/material';
 import UserNavbar from '../components/UserNavbar';
 import Footer from '../components/Footer';
 import AnimatedBackground from '../components/AnimatedBackground';
 import GoogleMapsDirections from '../components/GoogleMapsDirections';
+import StationMapPreview from '../components/StationMapPreview';
+import GetDirectionsButton from '../components/GetDirectionsButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EvStationIcon from '@mui/icons-material/EvStation';
-import DirectionsIcon from '@mui/icons-material/Directions';
-import WifiIcon from '@mui/icons-material/Wifi';
-import RestaurantIcon from '@mui/icons-material/Restaurant';
-import WcIcon from '@mui/icons-material/Wc';
-import LocalParkingIcon from '@mui/icons-material/LocalParking';
- 
+import ThumbUpIcon from '@mui/icons-material/ThumbUp';
+import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 
 const StationDetails = () => {
   const { id } = useParams();
@@ -53,6 +51,14 @@ const StationDetails = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedImage, setSelectedImage] = useState('');
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    rating: 0,
+    comment: ''
+  });
   
   // Real-time availability for this station
   const { availability: realTimeAvailability } = useSingleStationAvailability(id, 30000);
@@ -282,46 +288,6 @@ const StationDetails = () => {
     });
   };
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
-        const [stationRes, userRes] = await Promise.all([
-          fetch(`${apiBase}/public/stations/${id}`),
-          getMe().catch(() => null)
-        ]);
-        
-        if (!stationRes.ok) throw new Error(`Failed to load station: ${stationRes.status}`);
-        const stationData = await stationRes.json();
-        setStation(stationData?.data);
-
-        // Load user's vehicles and catalog vehicles
-        await Promise.all([loadMyVehicles(), loadCatalogVehicles(), loadMyBookings()]);
-
-        if (userRes) {
-          setUser(userRes);
-        }
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [id]);
-
-  if (loading) {
-    return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
-        <AnimatedBackground />
-        <UserNavbar user={user} />
-        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Box>
-      </Box>
-    );
-  }
-
   const handleBookingSubmit = async () => {
     if (!bookingForm.chargerType || !bookingForm.startTime || !bookingForm.endTime || bookingForm.selectedVehicleIndex === '') {
       setSnackbar({ open: true, message: 'Please fill all required fields including vehicle selection', severity: 'error' });
@@ -478,6 +444,291 @@ const StationDetails = () => {
     }
   };
 
+  // Check if user has completed a booking at this station
+  const checkUserCanReview = () => {
+    if (!user || !myBookings || myBookings.length === 0) return false;
+    
+    // Check if user has a completed booking at this station
+    return myBookings.some(booking => {
+      // Handle both string and object formats for stationId
+      const bookingStationId = booking.stationId?._id || booking.stationId;
+      return bookingStationId === id && booking.status === 'completed';
+    });
+  };
+
+  // Check if user has already reviewed this station
+  const getUserReview = () => {
+    if (!user || !reviews || reviews.length === 0) return null;
+    
+    // Get user ID in various possible formats
+    const userId = user._id || user.id || (user._id && user._id.toString());
+    
+    return reviews.find(review => {
+      // Get review user ID in various possible formats
+      const reviewUserId = review.userId?._id || review.userId || (review.userId && review.userId.toString());
+      
+      // Compare user IDs
+      return reviewUserId === userId;
+    });
+  };
+
+  // Handle like/dislike for reviews
+  const handleLikeReview = async (reviewId) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setSnackbar({ open: true, message: 'You must be logged in to like a review', severity: 'error' });
+        return;
+      }
+
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/reviews/${reviewId}/like`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the reviews state with new like count
+        setReviews(prevReviews => 
+          prevReviews.map(review => 
+            review._id === reviewId 
+              ? { ...review, likes: result.data.likes, dislikes: result.data.dislikes } 
+              : review
+          )
+        );
+      } else {
+        setSnackbar({ open: true, message: result.message || 'Failed to like review', severity: 'error' });
+      }
+    } catch (error) {
+      console.error('Error liking review:', error);
+      setSnackbar({ open: true, message: 'Network error liking review', severity: 'error' });
+    }
+  };
+
+  const handleDislikeReview = async (reviewId) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setSnackbar({ open: true, message: 'You must be logged in to dislike a review', severity: 'error' });
+        return;
+      }
+
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/reviews/${reviewId}/dislike`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the reviews state with new dislike count
+        setReviews(prevReviews => 
+          prevReviews.map(review => 
+            review._id === reviewId 
+              ? { ...review, likes: result.data.likes, dislikes: result.data.dislikes } 
+              : review
+          )
+        );
+      } else {
+        setSnackbar({ open: true, message: result.message || 'Failed to dislike review', severity: 'error' });
+      }
+    } catch (error) {
+      console.error('Error disliking review:', error);
+      setSnackbar({ open: true, message: 'Network error disliking review', severity: 'error' });
+    }
+  };
+
+  // Handle review submission
+  const handleReviewSubmit = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setSnackbar({ open: true, message: 'You must be logged in to submit a review', severity: 'error' });
+        return;
+      }
+
+      // Check if user has completed a booking at this station
+      const completedBooking = myBookings.find(booking => {
+        // Handle both string and object formats for stationId
+        const bookingStationId = booking.stationId?._id || booking.stationId;
+        return bookingStationId === id && booking.status === 'completed';
+      });
+
+      if (!completedBooking) {
+        setSnackbar({ open: true, message: 'You can only review stations where you have completed a booking', severity: 'error' });
+        return;
+      }
+
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      
+      // Always create a new review (no editing)
+      const url = `${apiBase}/reviews`;
+      const method = 'POST';
+
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          stationId: id,
+          rating: reviewForm.rating,
+          comment: reviewForm.comment,
+          bookingId: completedBooking._id || completedBooking.id
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setSnackbar({ open: true, message: 'Review submitted successfully', severity: 'success' });
+        setShowReviewForm(false);
+        setReviewForm({ rating: 0, comment: '' });
+        // Reload reviews
+        loadReviews();
+        // Refresh station details to reflect updated rating
+        try {
+          const stationRes = await fetch(`${API_BASE}/public/stations/${id}`, { cache: 'no-store' });
+          if (stationRes.ok) {
+            const stationBody = await stationRes.json();
+            if (stationBody?.data) setStation(stationBody.data);
+          }
+        } catch (_) {}
+      } else {
+        setSnackbar({ open: true, message: result.message || 'Failed to submit review', severity: 'error' });
+      }
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      setSnackbar({ open: true, message: 'Network error submitting review', severity: 'error' });
+    }
+  };
+
+  // Handle review deletion
+  const handleDeleteReview = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setSnackbar({ open: true, message: 'You must be logged in to delete a review', severity: 'error' });
+        return;
+      }
+
+      const userReview = getUserReview();
+      if (!userReview) {
+        setSnackbar({ open: true, message: 'No review found to delete', severity: 'error' });
+        return;
+      }
+
+      // Confirm deletion
+      if (!window.confirm('Are you sure you want to delete your review?')) {
+        return;
+      }
+
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/reviews/${userReview._id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setSnackbar({ open: true, message: 'Review deleted successfully', severity: 'success' });
+        setShowReviewForm(false);
+        setReviewForm({ rating: 0, comment: '' });
+        // Reload reviews
+        loadReviews();
+        // Refresh station details to reflect updated rating
+        try {
+          const stationRes = await fetch(`${API_BASE}/public/stations/${id}`, { cache: 'no-store' });
+          if (stationRes.ok) {
+            const stationBody = await stationRes.json();
+            if (stationBody?.data) setStation(stationBody.data);
+          }
+        } catch (_) {}
+      } else {
+        setSnackbar({ open: true, message: result.message || 'Failed to delete review', severity: 'error' });
+      }
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      setSnackbar({ open: true, message: 'Network error deleting review', severity: 'error' });
+    }
+  };
+
+  // Load reviews for the station
+  const loadReviews = useCallback(async () => {
+    try {
+      const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/reviews/station/${id}`);
+      if (response.ok) {
+        const result = await response.json();
+        setReviews(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading reviews:', error);
+    }
+  }, [id]);
+
+  // Populate review form when showing form - always reset to initial values
+  useEffect(() => {
+    if (showReviewForm) {
+      // Reset form for new review
+      setReviewForm({
+        rating: 0,
+        comment: ''
+      });
+    }
+  }, [showReviewForm]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
+        const [stationRes, userRes] = await Promise.all([
+          fetch(`${apiBase}/public/stations/${id}`),
+          getMe().catch(() => null)
+        ]);
+        
+        if (!stationRes.ok) throw new Error(`Failed to load station: ${stationRes.status}`);
+        const stationData = await stationRes.json();
+        setStation(stationData?.data);
+        
+        // Set the first image as the selected image when station data loads
+        if (stationData?.data?.images && stationData.data.images.length > 0) {
+          setSelectedImage(stationData.data.images[0]);
+        }
+
+        // Load user's vehicles, catalog vehicles, bookings, and reviews
+        await Promise.all([
+          loadMyVehicles(), 
+          loadCatalogVehicles(), 
+          loadMyBookings(),
+          loadReviews()
+        ]);
+
+        if (userRes) {
+          setUser(userRes);
+        }
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [id, loadReviews]);
+
   // Calculate available chargers by type - use real-time availability data
   const getAvailableChargersByType = (type) => {
     // Use real-time availability data if available
@@ -515,6 +766,18 @@ const StationDetails = () => {
     
     return [];
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
+        <AnimatedBackground />
+        <UserNavbar user={user} />
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <CircularProgress />
+        </Box>
+      </Box>
+    );
+  }
 
   if (error || !station) {
     return (
@@ -579,42 +842,33 @@ const StationDetails = () => {
           }}>
             <Grid container spacing={4} alignItems="center">
               <Grid item xs={12} md={8}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <Box sx={{
-                    p: 1.5,
-                    borderRadius: '50%',
-                    bgcolor: 'rgba(255,255,255,0.2)',
-                    mr: 3,
-                    backdropFilter: 'blur(10px)'
+                <Box>
+                  <Typography variant="h2" sx={{
+                    fontWeight: 800,
+                    mb: 1,
+                    textShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    letterSpacing: '-0.025em'
                   }}>
-                    <EvStationIcon sx={{ fontSize: 48 }} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h2" sx={{
-                      fontWeight: 800,
-                      mb: 1,
-                      textShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                      letterSpacing: '-0.025em'
-                    }}>
-                      {station.name}
+                    {station.name}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <LocationOnIcon sx={{ mr: 1.5, fontSize: 20 }} />
+                    <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '1.1rem' }}>
+                      {station.location?.address}, {station.location?.city}, {station.location?.state} {station.location?.pincode}
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <LocationOnIcon sx={{ mr: 1.5, fontSize: 20 }} />
-                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '1.1rem' }}>
-                        {station.location?.address}, {station.location?.city}, {station.location?.state} {station.location?.pincode}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Rating value={station.analytics?.rating || 0} readOnly precision={0.5} sx={{ color: '#fbbf24', mr: 1 }} />
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {(station.analytics?.rating || 0).toFixed(1)} ({station.analytics?.totalReviews || 0} reviews)
                       </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Rating value={4.5} readOnly precision={0.5} sx={{ color: '#fbbf24', mr: 1 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>4.5 (128 reviews)</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <AccessTimeIcon sx={{ mr: 1, fontSize: 18 }} />
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {station.operational?.operatingHours?.is24Hours ? '🟢 24/7 Open' : '🕐 Limited Hours'}
-                        </Typography>
-                      </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <AccessTimeIcon sx={{ mr: 1, fontSize: 18 }} />
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {station.operational?.operatingHours?.is24Hours ? '🟢 24/7 Open' : '🕐 Limited Hours'}
+                      </Typography>
                     </Box>
                   </Box>
                 </Box>
@@ -667,11 +921,188 @@ const StationDetails = () => {
           </Box>
         </Card>
 
-        {/* Main Content Grid */}
+        {/* Main Content Grid - Two-Column Layout */}
         <Grid container spacing={4}>
-          {/* Left Column - Chargers and Amenities */}
+          {/* Left Column - 65% width */}
           <Grid item xs={12} lg={8}>
-            {/* Available Chargers Overview */}
+            {/* Station Reviews - Moved to top of left column */}
+            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', mb: 4 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  Station Reviews
+                </Typography>
+                
+                {/* Add Review Button - Only shown if user hasn't reviewed yet */}
+                {user && checkUserCanReview() && !getUserReview() && !showReviewForm && (
+                  <Button 
+                    variant="contained" 
+                    onClick={() => {
+                      setShowReviewForm(true);
+                    }}
+                    sx={{ mb: 3 }}
+                  >
+                    Write a Review
+                  </Button>
+                )}
+                
+                {/* Delete Review Button - Only shown if user has already reviewed */}
+                {user && getUserReview() && !showReviewForm && (
+                  <Button 
+                    variant="outlined" 
+                    color="error"
+                    onClick={handleDeleteReview}
+                    sx={{ mb: 3 }}
+                  >
+                    Delete Review
+                  </Button>
+                )}
+                
+                {/* Review Form */}
+                {showReviewForm && (
+                  <Card sx={{ mb: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      Write Your Review
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Typography sx={{ mr: 2 }}>Rating:</Typography>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <IconButton
+                          key={star}
+                          sx={{ 
+                            fontSize: 32, 
+                            color: reviewForm.rating >= star ? '#fbbf24' : '#d1d5db',
+                            '&:hover': { color: '#fbbf24' }
+                          }}
+                          onClick={() => {
+                            setReviewForm(prev => ({ ...prev, rating: star }));
+                          }}
+                        >
+                          ★
+                        </IconButton>
+                      ))}
+                    </Box>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={4}
+                      variant="outlined"
+                      placeholder="Share your experience at this station..."
+                      value={reviewForm.comment}
+                      onChange={(e) => {
+                        setReviewForm(prev => ({ ...prev, comment: e.target.value }));
+                      }}
+                      sx={{ mb: 2 }}
+                    />
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Button 
+                        variant="contained" 
+                        onClick={handleReviewSubmit}
+                        disabled={reviewForm.rating === 0}
+                      >
+                        Submit Review
+                      </Button>
+                      <Button 
+                        variant="outlined" 
+                        onClick={() => {
+                          setShowReviewForm(false);
+                          // Reset form to initial values
+                          setReviewForm({
+                            rating: 0,
+                            comment: ''
+                          });
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </Box>
+                  </Card>
+                )}
+                
+                {/* Reviews List */}
+                {reviews.length > 0 ? (
+                  <Stack spacing={3}>
+                    {reviews.map((review) => (
+                      <Box key={review._id} sx={{ borderBottom: '1px solid #e5e7eb', pb: 3 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <Avatar 
+                            src={review.userId?.personalInfo?.profileImage} 
+                            sx={{ width: 40, height: 40, mr: 2 }}
+                          >
+                            {review.userId?.personalInfo?.firstName?.[0] || 'U'}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                              {review.userId?.personalInfo?.firstName} {review.userId?.personalInfo?.lastName}
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Box
+                                  key={star}
+                                  component="span"
+                                  sx={{ 
+                                    fontSize: 16, 
+                                    color: review.rating >= star ? '#fbbf24' : '#d1d5db'
+                                  }}
+                                >
+                                  ★
+                                </Box>
+                              ))}
+                              <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                                {new Date(review.createdAt).toLocaleDateString()}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                        {review.comment && (
+                          <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                            {review.comment}
+                          </Typography>
+                        )}
+                        {/* Like/Dislike Buttons */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleLikeReview(review._id)}
+                              sx={{ 
+                                color: review.likedBy?.includes(user?._id) ? '#3b82f6' : 'text.secondary',
+                                '&:hover': { color: '#3b82f6' }
+                              }}
+                            >
+                              <ThumbUpIcon fontSize="small" />
+                            </IconButton>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {review.likes || 0}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleDislikeReview(review._id)}
+                              sx={{ 
+                                color: review.dislikedBy?.includes(user?._id) ? '#ef4444' : 'text.secondary',
+                                '&:hover': { color: '#ef4444' }
+                              }}
+                            >
+                              <ThumbDownIcon fontSize="small" />
+                            </IconButton>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {review.dislikes || 0}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                    No reviews yet. {user && checkUserCanReview() ? 'Be the first to add a review!' : 'Only users who have completed a booking can review this station.'}
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Charging Overview */}
             <Card sx={{ mb: 4, borderRadius: 3 }}>
               <CardContent sx={{ p: 3 }}>
                 <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, display: 'flex', alignItems: 'center' }}>
@@ -798,53 +1229,38 @@ const StationDetails = () => {
                             borderColor: isAvailable ? '#059669' : '#667eea'
                           }
                         }}>
-                          <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                            <Avatar sx={{
-                              bgcolor: isAvailable ? '#10b981' : '#dc2626',
-                              width: 64,
-                              height: 64,
-                              mx: 'auto',
-                              mb: 2,
-                              boxShadow: '0 4px 14px rgba(0,0,0,0.1)'
-                            }}>
-                              <EvStationIcon sx={{ fontSize: 32 }} />
-                            </Avatar>
-                            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1f2937' }}>
-                              {type.replace('_', ' ').toUpperCase()}
+                          <CardContent sx={{ p: 3 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                              {type.toUpperCase()}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
-                              Power Output
+                            <Typography variant="body2" sx={{ mb: 2 }}>
+                              {isAvailable ? `${available.length} available` : 'Not available'}
                             </Typography>
-                            <Typography variant="h4" sx={{
-                              fontWeight: 800,
-                              color: isAvailable ? '#10b981' : '#6b7280',
-                              mb: 2,
-                              textShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                            }}>
+                            <Typography variant="body2" sx={{ mb: 2 }}>
                               {power} kW
                             </Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, alignItems: 'center', flexDirection: 'column' }}>
-                              <Chip
-                                label={isAvailable ? `${available.length} Available` : 'Not Available'}
-                                color={isAvailable ? "success" : "error"}
-                                variant={isAvailable ? "filled" : "outlined"}
-                                size="small"
-                                sx={{
-                                  fontWeight: 600,
-                                  '& .MuiChip-label': { fontSize: '0.8rem' }
+                            {showNotSupported && (
+                              <Typography variant="caption" color="error" sx={{ mb: 2 }}>
+                                No compatible vehicle found
+                              </Typography>
+                            )}
+                            {userHasCompatibleVehicle && (
+                              <Button
+                                variant="contained"
+                                color="success"
+                                onClick={() => {
+                                  setBookingForm((bf) => ({
+                                    ...bf,
+                                    chargerType: type,
+                                    selectedVehicleIndex: ''
+                                  }));
+                                  setBookingDialog(true);
                                 }}
-                              />
-                              {isAvailable && !showNotSupported && (
-                                <Typography variant="caption" sx={{ color: '#059669', fontWeight: 600 }}>
-                                  ✓ Ready to charge
-                                </Typography>
-                              )}
-                              {showNotSupported && (
-                                <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 600 }}>
-                                  ⚠️ Not supported by your vehicles
-                                </Typography>
-                              )}
-                            </Box>
+                                sx={{ mt: 2 }}
+                              >
+                                Book Now
+                              </Button>
+                            )}
                           </CardContent>
                         </Card>
                       </Grid>
@@ -854,348 +1270,114 @@ const StationDetails = () => {
               </CardContent>
             </Card>
 
-            {/* Amenities Section */}
-            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+            {/* Station Images */}
+            <Card sx={{ mb: 4, borderRadius: 3 }}>
               <CardContent sx={{ p: 3 }}>
-                <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
-                  Amenities & Facilities
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  Station Images
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Additional services available at this station
-                </Typography>
-                <Grid container spacing={2}>
-                  {[
-                    { icon: <LocalParkingIcon />, label: 'Free Parking', available: station.operational?.parkingSlots > 0, description: `${station.operational?.parkingSlots || 0} spots` },
-                    { icon: <WifiIcon />, label: 'Wi-Fi', available: true, description: 'High-speed internet' },
-                    { icon: <RestaurantIcon />, label: 'Food & Drinks', available: false, description: 'Coming soon' },
-                    { icon: <WcIcon />, label: 'Restrooms', available: true, description: 'Clean facilities' },
-                  ].map((amenity, idx) => (
-                    <Grid item xs={6} sm={3} key={idx}>
-                      <Box sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        p: 2.5,
-                        borderRadius: 3,
-                        bgcolor: amenity.available ? 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' : '#fafafa',
-                        border: `2px solid ${amenity.available ? '#10b981' : '#e5e7eb'}`,
-                        transition: 'all 0.3s ease',
-                        cursor: amenity.available ? 'default' : 'not-allowed',
-                        '&:hover': amenity.available ? {
-                          transform: 'translateY(-2px)',
-                          boxShadow: '0 6px 20px rgba(16, 185, 129, 0.15)',
-                          borderColor: '#059669'
-                        } : {}
-                      }}>
-                        <Box sx={{
-                          color: amenity.available ? '#10b981' : '#9ca3af',
-                          mb: 1.5,
-                          fontSize: '2rem'
-                        }}>
-                          {amenity.icon}
-                        </Box>
-                        <Typography variant="body2" sx={{
-                          textAlign: 'center',
-                          fontWeight: 600,
-                          color: amenity.available ? '#1f2937' : '#6b7280',
-                          mb: 0.5
-                        }}>
-                          {amenity.label}
-                        </Typography>
-                        <Typography variant="caption" sx={{
-                          textAlign: 'center',
-                          color: amenity.available ? '#059669' : '#9ca3af',
-                          fontWeight: 500
-                        }}>
-                          {amenity.description}
-                        </Typography>
-                      </Box>
-                    </Grid>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  {station.images?.map((img, idx) => (
+                    <Box key={idx} sx={{ position: 'relative', width: '100%', height: 0, pb: '56.25%', cursor: 'pointer' }}>
+                      <img
+                        src={img}
+                        alt={`Station ${idx + 1}`}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                        onClick={() => {
+                          setSelectedImage(img);
+                          setImageViewerOpen(true);
+                        }}
+                      />
+                    </Box>
                   ))}
-                </Grid>
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Station Details */}
+            <Card sx={{ mb: 4, borderRadius: 3 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  Station Details
+                </Typography>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    Address:
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    {station.location?.address}, {station.location?.city}, {station.location?.state} {station.location?.pincode}
+                  </Typography>
+                </Box>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    Operating Hours:
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    {station.operational?.operatingHours?.is24Hours ? '24/7' : 'Limited Hours'}
+                  </Typography>
+                </Box>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    Pricing:
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    ₹{station.pricing?.pricePerMinute ?? station.pricing?.basePrice ?? 0} per minute
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Right Column - Pricing and Booking */}
+          {/* Right Column - 35% width */}
           <Grid item xs={12} lg={4}>
-            {/* Pricing Card */}
-            <Card sx={{
-              mb: 3,
-              borderRadius: 3,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-              border: '1px solid #e5e7eb'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
-                  💰 Pricing & Booking
-                </Typography>
-                {station.operational?.status === 'maintenance' && (
-                  <Box sx={{ mb: 3, p: 2, bgcolor: '#fff7ed', borderRadius: 2, border: '1px solid #f59e0b' }}>
-                    <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 600 }}>
-                      This station is under maintenance. Booking is disabled.
-                    </Typography>
-                  </Box>
-                )}
-
-                {/* Price Highlight Box */}
-                <Box sx={{
-                  mb: 3,
-                  p: 3,
-                  borderRadius: 3,
-                  background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-                  border: '2px solid #0ea5e9',
-                  textAlign: 'center'
-                }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
-                    Base Rate
-                  </Typography>
-                  <Typography variant="h3" sx={{
-                    fontWeight: 800,
-                    color: '#0ea5e9',
-                    mb: 1,
-                    textShadow: '0 2px 4px rgba(14, 165, 233, 0.2)'
-                  }}>
-                    ₹{station.pricing?.pricePerMinute ?? station.pricing?.basePrice ?? 0}
-                  </Typography>
-                  <Typography variant="body1" color="#0369a1" sx={{ fontWeight: 600 }}>
-                    per minute
-                  </Typography>
-                </Box>
-
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
-                    Operating Hours
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccessTimeIcon sx={{ color: '#10b981', fontSize: 18 }} />
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {station.operational?.operatingHours?.is24Hours ?
-                        '🟢 Open 24/7' :
-                        `🕐 ${station.operational?.operatingHours?.customHours?.start || '00:00'} - ${station.operational?.operatingHours?.customHours?.end || '23:59'}`
-                      }
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {station.pricing?.cancellationPolicy && (
-                  <Box sx={{ mb: 3, p: 2, bgcolor: '#fef3c7', borderRadius: 2, border: '1px solid #f59e0b' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: '#92400e', mb: 1 }}>
-                      📋 Cancellation Policy
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: '#78350f' }}>
-                      {station.pricing.cancellationPolicy}
-                    </Typography>
-                  </Box>
-                )}
-
-                <Divider sx={{ my: 3 }} />
-
-                {/* Quick Actions */}
-                <Stack spacing={2}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<DirectionsIcon />}
-                    onClick={() => setDirectionsDialog(true)}
-                    fullWidth
-                    sx={{
-                      borderRadius: 3,
-                      py: 1.5,
-                      borderColor: '#667eea',
-                      color: '#667eea',
-                      '&:hover': {
-                        borderColor: '#5a67d8',
-                        bgcolor: '#f0f4ff',
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.2)'
-                      }
-                    }}
-                  >
-                    🗺️ Get Directions
-                  </Button>
-
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={() => setBookingDialog(true)}
-                    disabled={station.operational?.status !== 'active' || station.capacity?.availableSlots === 0}
-                    fullWidth
-                    sx={{
-                      borderRadius: 3,
-                      py: 1.5,
-                      fontSize: '1.1rem',
-                      fontWeight: 600,
-                      background: station.operational?.status === 'maintenance'
-                        ? '#f59e0b'
-                        : (station.capacity?.availableSlots === 0
-                          ? '#dc2626'
-                          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
-                      '&:hover': {
-                        background: station.operational?.status === 'maintenance'
-                          ? '#d97706'
-                          : (station.capacity?.availableSlots === 0
-                            ? '#b91c1c'
-                            : 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)'),
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
-                      },
-                      '&:disabled': {
-                        background: station.operational?.status === 'maintenance' ? '#f59e0b' : '#dc2626',
-                        color: 'white'
-                      }
-                    }}
-                  >
-                    {station.operational?.status === 'maintenance'
-                      ? '🚧 Under maintenance'
-                      : (station.capacity?.availableSlots === 0 ? '🚫 Station Full' : '⚡ Book Now')}
-                  </Button>
-                </Stack>
-
-                {/* Additional Info */}
-                <Box sx={{ mt: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e5e7eb' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', fontSize: '0.85rem' }}>
-                    💡 Book ahead to secure your charging slot and avoid wait times
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-
-            {/* My Recent Bookings */}
-            <Card sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', mb: 3 }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#1f2937' }}>
-                  My Recent Bookings
-                </Typography>
-                {(!myBookings || myBookings.length === 0) ? (
-                  <Typography variant="body2" color="text.secondary">No recent bookings.</Typography>
-                ) : (
-                  <Stack spacing={1.5}>
-                    {myBookings.map((b) => {
-                      const now = new Date();
-                      const start = new Date(b.startTime);
-                      const end = new Date(b.endTime);
-                      const isPast = end < now;
-                      const isUpcoming = start > now;
-                      const isCancelled = b.status === 'cancelled';
-                      const isCompleted = b.status === 'completed';
-                      const label = isCancelled ? 'cancelled' : (isCompleted ? 'completed' : (isPast ? 'past' : (isUpcoming ? 'upcoming' : 'ongoing')));
-                      const chipColor = isCancelled ? 'error' : (isCompleted ? 'default' : (isPast ? 'default' : (isUpcoming ? 'primary' : 'success')));
-                      return (
-                        <Box key={b._id} sx={{ p: 1.5, border: '1px solid #e5e7eb', borderRadius: 2 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                            <Box>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                {b.stationId?.name || 'Station'}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {start.toLocaleString()} → {end.toLocaleString()}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Chip size="small" color={chipColor} label={label} />
-                              {isUpcoming && !isCancelled && (
-                                <Button size="small" variant="outlined" onClick={() => navigate('/home')}>Edit</Button>
-                              )}
-                            </Box>
-                          </Box>
-                        </Box>
-                      );
-                    })}
-                  </Stack>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Station Photos Section */}
-            <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+            {/* Map and Directions */}
+            <Card sx={{ mb: 4, borderRadius: 3 }}>
               <CardContent sx={{ p: 3 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
-                  Station Photos & Gallery
+                  Map and Directions
                 </Typography>
-                <Grid container spacing={2}>
-                  {/* Main photo or placeholder */}
-                  <Grid item xs={12} md={8}>
-                    {station.images && station.images.length > 0 ? (
-                      <Box sx={{
-                        height: 320,
-                        borderRadius: 3,
-                        overflow: 'hidden',
-                        border: '1px solid #e5e7eb'
-                      }}>
-                        <img
-                          alt="station-main"
-                          src={`${API_ORIGIN}${station.images[0]}`}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        />
-                      </Box>
-                    ) : (
-                      <Box sx={{
-                        height: 240,
-                        bgcolor: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
-                        borderRadius: 3,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '3px dashed #9ca3af',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          background: 'linear-gradient(45deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
-                        }
-                      }}>
-                        <EvStationIcon sx={{ fontSize: 64, color: '#9ca3af', mb: 2 }} />
-                        <Typography variant="h6" color="#6b7280" sx={{ fontWeight: 600, mb: 1 }}>
-                          Station Gallery
+                {/* Small Map Preview */}
+                <Box sx={{ mb: 2, height: 200 }}>
+                  <StationMapPreview station={station} height={200} />
+                </Box>
+                <Box sx={{ mb: 2 }}>
+                  <GetDirectionsButton onClick={() => setDirectionsDialog(true)} />
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Recent Bookings */}
+            <Card sx={{ mb: 4, borderRadius: 3 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#1f2937' }}>
+                  Recent Bookings
+                </Typography>
+                {myBookings.length > 0 ? (
+                  <Stack spacing={2}>
+                    {myBookings.map((booking) => (
+                      <Box key={booking._id} sx={{ borderBottom: '1px solid #e5e7eb', pb: 2 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {new Date(booking.startTime).toLocaleString()}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', px: 2 }}>
-                          High-quality photos of charging bays, facilities, and surroundings coming soon
+                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                          {booking.duration} hours
                         </Typography>
                       </Box>
-                    )}
-                  </Grid>
-
-                  {/* Thumbnails or placeholders */}
-                  <Grid item xs={12} md={4}>
-                    {station.images && station.images.length > 1 ? (
-                      <Stack spacing={2}>
-                        {station.images.slice(1, 4).map((u, idx) => (
-                          <Box key={idx} sx={{ height: 96, borderRadius: 2, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
-                            <img alt={`thumb-${idx}`} src={`${API_ORIGIN}${u}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                          </Box>
-                        ))}
-                      </Stack>
-                    ) : (
-                      <Stack spacing={2}>
-                        {[1, 2, 3].map((i) => (
-                          <Box key={i} sx={{
-                            height: 70,
-                            bgcolor: '#f9fafb',
-                            borderRadius: 2,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: '2px dashed #e5e7eb',
-                            transition: 'all 0.3s ease',
-                            '&:hover': { bgcolor: '#f3f4f6', borderColor: '#667eea' }
-                          }}>
-                            <Typography variant="caption" color="text.secondary">
-                              Photo {i}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Stack>
-                    )}
-                  </Grid>
-                </Grid>
-
-                
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                    No recent bookings
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -1371,21 +1553,58 @@ const StationDetails = () => {
           </Alert>
         </Snackbar>
         
-        {/* Google Maps Directions Dialog */}
-        <GoogleMapsDirections
-          open={directionsDialog}
-          onClose={() => setDirectionsDialog(false)}
-          destination={station ? {
-            lat: station.location?.coordinates?.latitude,
-            lng: station.location?.coordinates?.longitude
-          } : null}
-          stationName={station?.name}
-        />
+        {/* Image Viewer Dialog */}
+        <Dialog 
+          open={imageViewerOpen} 
+          onClose={() => setImageViewerOpen(false)} 
+          maxWidth="md" 
+          fullWidth
+          PaperProps={{
+            style: {
+              backgroundColor: 'transparent',
+              boxShadow: 'none',
+              overflow: 'hidden'
+            }
+          }}
+        >
+          <DialogContent sx={{ p: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'transparent' }}>
+            {selectedImage && (
+              <Box 
+                component="img" 
+                src={selectedImage} 
+                alt="Station" 
+                sx={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '80vh', 
+                  objectFit: 'contain',
+                  borderRadius: 1,
+                  bgcolor: 'black'
+                }} 
+              />
+            )}
+          </DialogContent>
+          <DialogActions sx={{ justifyContent: 'center', bgcolor: 'transparent' }}>
+            <Button 
+              onClick={() => setImageViewerOpen(false)} 
+              variant="contained" 
+              sx={{ 
+                bgcolor: 'rgba(0, 0, 0, 0.7)', 
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.9)'
+                }
+              }}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+        
         </Container>
         <Footer />
       </Box>
-  );
-};
+    );
+  };
 
 export default StationDetails;
 

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Container, Grid, Card, CardContent, Typography, Chip, IconButton, TextField, MenuItem, Button } from '@mui/material';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Box, Container, Grid, Card, CardContent, Typography, Chip, IconButton, TextField, Button } from '@mui/material';
 import DirectionsIcon from '@mui/icons-material/Directions';
 import SearchIcon from '@mui/icons-material/Search';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
@@ -11,18 +11,22 @@ import { useNavigate } from 'react-router-dom';
 import { useRealTimeAvailability } from '../hooks/useRealTimeAvailability';
 
 const StationsPage = () => {
+  console.log('StationsPage rendered at:', new Date().toLocaleTimeString());
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [type, setType] = useState('all');
   const [selectedStation, setSelectedStation] = useState(null);
 
-  // Get station IDs for real-time availability
-  const stationIds = stations.map(s => s._id);
-  const { availability: realTimeAvailability } = useRealTimeAvailability(stationIds, 30000); // Refresh every 30 seconds
+  // Get station IDs for real-time availability (memoized to prevent unnecessary re-renders)
+  const stationIds = useMemo(() => {
+    const ids = stations.map(s => s._id);
+    console.log('Station IDs updated:', ids);
+    return ids;
+  }, [stations]);
+  const { availability: realTimeAvailability } = useRealTimeAvailability(stationIds, 15000); // Refresh every 15 seconds
 
   useEffect(() => {
     (async () => {
@@ -36,7 +40,7 @@ const StationsPage = () => {
   const loadStations = async () => {
     try {
       setLoading(true);
-      const data = await getPublicStationsApi({ search, type: type === 'all' ? '' : type });
+      const data = await getPublicStationsApi({ search });
       setStations(Array.isArray(data?.data) ? data.data : []);
     } catch (e) {
       setError(e.message || 'Failed to load stations');
@@ -45,9 +49,19 @@ const StationsPage = () => {
     }
   };
 
-  useEffect(() => { loadStations(); // initial
+  useEffect(() => { 
+    loadStations(); // initial load
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Add this useEffect to trigger search when search term changes
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      loadStations();
+    }, 300); // Debounce search by 300ms
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [search]);
 
   const handleGetDirections = (station, event) => {
     event.stopPropagation();
@@ -66,16 +80,8 @@ const StationsPage = () => {
           </Box>
 
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={9}>
               <TextField fullWidth placeholder="Search stations by name..." value={search} onChange={(e) => setSearch(e.target.value)} InputProps={{ startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} /> }} />
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField fullWidth select label="Station Type" value={type} onChange={(e) => setType(e.target.value)}>
-                <MenuItem value="all">All Types</MenuItem>
-                <MenuItem value="ac_type2">AC Type 2</MenuItem>
-                <MenuItem value="dc_ccs2">DC CCS2</MenuItem>
-                <MenuItem value="dc_chademo">DC CHAdeMO</MenuItem>
-              </TextField>
             </Grid>
             <Grid item xs={12} md={3}>
               <Button fullWidth variant="outlined" startIcon={<MyLocationIcon />} onClick={loadStations}>My Location</Button>
@@ -112,8 +118,8 @@ const StationsPage = () => {
               const statusText = isMaintenance
                 ? 'Under maintenance'
                 : (rawStatus === 'active' ? 'Ready for charging' : (typeof rawStatus === 'string' ? rawStatus : undefined));
-              // Rating and amenities (fallback rating to 4.5 if none provided)
-              const rating = typeof s?.analytics?.rating === 'number' ? s.analytics.rating : (typeof s?.ratingAverage === 'number' ? s.ratingAverage : undefined);
+              // Rating and amenities (use station analytics rating)
+              const rating = typeof s?.analytics?.rating === 'number' ? s.analytics.rating : 0;
               const amenities = Array.isArray(s?.amenities) && s.amenities.length > 0 ? s.amenities : null;
               return (
               <Grid item xs={12} sm={6} md={6} lg={6} key={s._id}>
@@ -150,7 +156,7 @@ const StationsPage = () => {
                       )}
                     </Box>
                     <Typography variant="body2" color="text.secondary">
-                      {`⭐ ${rating ? rating.toFixed(1) : '4.5'}/5`} • {amenities ? `${amenities.length} amenities` : 'No amenities listed'}
+                      {`⭐ ${rating.toFixed(1)}/5`} • {amenities ? `${amenities.length} amenities` : 'No amenities listed'}
                     </Typography>
                     {statusText && (
                       <Typography variant="body2" color={isMaintenance ? 'warning.main' : 'text.secondary'}>
@@ -206,5 +212,3 @@ const StationsPage = () => {
 };
 
 export default StationsPage;
-
-

@@ -31,7 +31,7 @@ const GoogleMapsDirections = ({
   open, 
   onClose, 
   destination, 
-  stationName 
+  stationName
 }) => {
   const [directions, setDirections] = useState(null);
   const [loading, setLoading] = useState(false);

@@ -1,6 +1,6 @@
 import express from 'express';
 import { requireAuth, requireRole } from '../middlewares/auth.js';
-import upload from '../middlewares/upload.js';
+import upload, { debugUpload } from '../middlewares/upload.js';
 import {
   getDashboardData,
   getBookings,
@@ -32,7 +32,7 @@ router.get('/reports', getReports);
 // Station details management
 router.get('/stations/:id', getStationDetails);
 router.patch('/stations/:id', updateStationDetails);
-router.post('/stations/:id/images', upload.array('images', 6), uploadStationImages);
+router.post('/stations/:id/images', debugUpload, upload.fields([{ name: 'images', maxCount: 10 }]), uploadStationImages);
 router.delete('/stations/:id/images', deleteStationImage);
 
 // Maintenance routes

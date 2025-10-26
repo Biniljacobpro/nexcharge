@@ -29,11 +29,29 @@ import {
   Paper,
   LinearProgress,
   Alert,
-  Snackbar
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem as SelectMenuItem,
+  FormControlLabel,
+  Switch,
+  InputAdornment,
+  CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Hidden
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
   EvStation as StationIcon,
+  EvStation as EvStationIcon,
   BookOnline as BookingIcon,
   Build as MaintenanceIcon,
   AttachMoney as PricingIcon,
@@ -66,10 +84,14 @@ import {
   Code,
   Map,
   AttachMoney as MoneyIcon,
-  Settings
+  Settings,
+  ExpandMore as ExpandMoreIcon,
+  BatteryChargingFull,
+  PhotoCamera as PhotoCameraIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import GoogleMapsLocationPicker from '../components/GoogleMapsLocationPicker';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import stationManagerService from '../services/stationManagerService';
 import Footer from '../components/Footer';
@@ -94,6 +116,54 @@ const StationManagerDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  
+  // Station management state
+  const [stationDialog, setStationDialog] = useState({ open: false, mode: 'view', station: null });
+  const [stationForm, setStationForm] = useState({
+    // Basic Station Info
+    name: '',
+    code: '',
+    description: '',
+    
+    // Location Info
+    address: '',
+    city: '',
+    state: '',
+    country: 'India',
+    pincode: '',
+    locationDms: '',
+    latitude: '',
+    longitude: '',
+    nearbyLandmarks: '',
+    
+    // Station Capacity & Chargers
+    totalChargers: 1,
+    chargerTypes: [],
+    maxPowerPerCharger: '',
+    totalPowerCapacity: '',
+    
+    // Pricing & Policies (only per-minute)
+    pricePerMinute: '',
+    cancellationPolicy: '',
+    
+    // Operational Details
+    openingHours: '24/7',
+    customHours: { start: '00:00', end: '23:59' },
+    is24Hours: true,
+    status: 'active',
+    parkingSlots: 1,
+    parkingFee: '',
+    
+    // Contact & Ownership
+    supportPhone: '',
+    supportEmail: '',
+    managerEmail: ''
+  });
+  const [stationLoading, setStationLoading] = useState(false);
+  const [availableManagers, setAvailableManagers] = useState([]);
+  const [managersLoading, setManagersLoading] = useState(false);
+  const [imageUploadLoading, setImageUploadLoading] = useState({});
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -218,14 +288,219 @@ const StationManagerDashboard = () => {
     console.log('Bulk update pricing');
   };
 
-  const handleRespondToFeedback = (feedbackId) => {
-    // TODO: Implement respond to feedback dialog
-    console.log('Respond to feedback:', feedbackId);
+  const handleViewFeedback = (feedbackId) => {
+    // TODO: Implement feedback view dialog
+    console.log('View feedback details:', feedbackId);
   };
 
-  const handleViewFeedbackDetails = (feedbackId) => {
-    // TODO: Implement view feedback details dialog
-    console.log('View feedback details:', feedbackId);
+  // Station management functions
+  const handleViewStation = (station) => {
+    const loc = station.location || {};
+    const cap = station.capacity || {};
+    const pricing = station.pricing || {};
+    const op = station.operational || {};
+    const contact = station.contact || {};
+    setStationForm({
+      name: station.name || '',
+      code: station.code || '',
+      description: station.description || '',
+      address: loc.address || station.address || '',
+      city: loc.city || station.city || '',
+      state: loc.state || station.state || '',
+      country: loc.country || station.country || 'India',
+      pincode: loc.pincode || station.pincode || '',
+      locationDms: (loc.dms || station.locationDms || ''),
+      latitude: loc.latitude ?? station.latitude ?? '',
+      longitude: loc.longitude ?? station.longitude ?? '',
+      nearbyLandmarks: loc.nearbyLandmarks || station.nearbyLandmarks || '',
+      totalChargers: cap.totalChargers ?? station.totalChargers ?? 1,
+      chargerTypes: cap.chargerTypes || station.chargerTypes || [],
+      maxPowerPerCharger: cap.maxPowerPerCharger ?? station.maxPowerPerCharger ?? '',
+      totalPowerCapacity: cap.totalPowerCapacity ?? station.totalPowerCapacity ?? '',
+      // Backward compatibility: fall back to legacy basePrice if present
+      pricePerMinute: pricing.pricePerMinute ?? pricing.basePrice ?? station.pricePerMinute ?? station.basePrice ?? '',
+      cancellationPolicy: pricing.cancellationPolicy || station.cancellationPolicy || '',
+      openingHours: op.openingHours || station.openingHours || '24/7',
+      customHours: op.customHours || station.customHours || { start: '00:00', end: '23:59' },
+      is24Hours: op.is24Hours !== undefined ? op.is24Hours : (station.is24Hours !== undefined ? station.is24Hours : true),
+      status: op.status || station.status || 'active',
+      parkingSlots: op.parkingSlots ?? station.parkingSlots ?? 1,
+      parkingFee: op.parkingFee ?? station.parkingFee ?? '',
+      supportPhone: contact.supportPhone || station.supportPhone || '',
+      supportEmail: contact.supportEmail || station.supportEmail || '',
+      managerEmail: station.manager?.email || station.contact?.managerEmail || ''
+    });
+    setStationDialog({ open: true, mode: 'view', station });
+  };
+
+  const handleEditStation = (station) => {
+    const loc = station.location || {};
+    const cap = station.capacity || {};
+    const pricing = station.pricing || {};
+    const op = station.operational || {};
+    const contact = station.contact || {};
+    setStationForm({
+      name: station.name || '',
+      code: station.code || '',
+      description: station.description || '',
+      address: loc.address || station.address || '',
+      city: loc.city || station.city || '',
+      state: loc.state || station.state || '',
+      country: loc.country || station.country || 'India',
+      pincode: loc.pincode || station.pincode || '',
+      locationDms: (loc.dms || station.locationDms || ''),
+      latitude: loc.latitude ?? station.latitude ?? '',
+      longitude: loc.longitude ?? station.longitude ?? '',
+      nearbyLandmarks: loc.nearbyLandmarks || station.nearbyLandmarks || '',
+      totalChargers: cap.totalChargers ?? station.totalChargers ?? 1,
+      chargerTypes: cap.chargerTypes || station.chargerTypes || [],
+      maxPowerPerCharger: cap.maxPowerPerCharger ?? station.maxPowerPerCharger ?? '',
+      totalPowerCapacity: cap.totalPowerCapacity ?? station.totalPowerCapacity ?? '',
+      // Backward compatibility: fall back to legacy basePrice if present
+      pricePerMinute: pricing.pricePerMinute ?? pricing.basePrice ?? station.pricePerMinute ?? station.basePrice ?? '',
+      cancellationPolicy: pricing.cancellationPolicy || station.cancellationPolicy || '',
+      openingHours: op.openingHours || station.openingHours || '24/7',
+      customHours: op.customHours || station.customHours || { start: '00:00', end: '23:59' },
+      is24Hours: op.is24Hours !== undefined ? op.is24Hours : (station.is24Hours !== undefined ? station.is24Hours : true),
+      status: op.status || station.status || 'active',
+      parkingSlots: op.parkingSlots ?? station.parkingSlots ?? 1,
+      parkingFee: op.parkingFee ?? station.parkingFee ?? '',
+      supportPhone: contact.supportPhone || station.supportPhone || '',
+      supportEmail: contact.supportEmail || station.supportEmail || '',
+      managerEmail: station.manager?.email || station.contact?.managerEmail || ''
+    });
+    setStationDialog({ open: true, mode: 'edit', station });
+  };
+
+  // Parse a DMS string like 9°32'41.5"N 76°49'02.8"E into decimal lat/lng
+  const parseDmsToDecimal = (dmsStr) => {
+    if (!dmsStr || typeof dmsStr !== 'string') return null;
+    const cleaned = dmsStr.trim().replace(/\s+/g, ' ');
+    const dmsRegex = /([0-9]{1,3})°\s*([0-9]{1,2})'\s*([0-9]{1,2}(?:\.[0-9]+)?)"?\s*([NS])\s+([0-9]{1,3})°\s*([0-9]{1,2})'\s*([0-9]{1,2}(?:\.[0-9]+)?)"?\s*([EW])/i;
+    const m = cleaned.match(dmsRegex);
+    if (!m) return null;
+    const toDecimal = (deg, min, sec, hemi) => {
+      const dec = Number(deg) + Number(min) / 60 + Number(sec) / 3600;
+      const sign = (hemi.toUpperCase() === 'S' || hemi.toUpperCase() === 'W') ? -1 : 1;
+      return dec * sign;
+    };
+    const lat = toDecimal(m[1], m[2], m[3], m[4]);
+    const lng = toDecimal(m[5], m[6], m[7], m[8]);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng };
+  };
+
+  const handleStationSubmit = async () => {
+    try {
+      setStationLoading(true);
+      
+      // Validation
+      if (!stationForm.name.trim()) {
+        setSnackbar({ open: true, message: 'Station name is required', severity: 'error' });
+        return;
+      }
+      if (!stationForm.address.trim()) {
+        setSnackbar({ open: true, message: 'Station address is required', severity: 'error' });
+        return;
+      }
+      if (!stationForm.city.trim()) {
+        setSnackbar({ open: true, message: 'City is required', severity: 'error' });
+        return;
+      }
+      if (stationForm.chargerTypes.length === 0) {
+        setSnackbar({ open: true, message: 'At least one charger type must be selected', severity: 'error' });
+        return;
+      }
+
+      // Range validations
+      const totalChargersNum = parseInt(stationForm.totalChargers);
+      if (Number.isNaN(totalChargersNum) || totalChargersNum < 1 || totalChargersNum > 50) {
+        setSnackbar({ open: true, message: 'Total chargers must be between 1 and 50', severity: 'error' });
+        return;
+      }
+      const maxPowerNum = parseFloat(stationForm.maxPowerPerCharger);
+      if (Number.isNaN(maxPowerNum) || maxPowerNum < 1 || maxPowerNum > 500) {
+        setSnackbar({ open: true, message: 'Max power per charger must be between 1 and 500 kW', severity: 'error' });
+        return;
+      }
+      const ppmNum = parseFloat(stationForm.pricePerMinute);
+      if (Number.isNaN(ppmNum) || ppmNum < 1 || ppmNum > 5000) {
+        setSnackbar({ open: true, message: 'Price per minute must be between ₹1 and ₹5000', severity: 'error' });
+        return;
+      }
+      const parkingSlotsNum = parseInt(stationForm.parkingSlots);
+      if (Number.isNaN(parkingSlotsNum) || parkingSlotsNum < 0 || parkingSlotsNum > 30) {
+        setSnackbar({ open: true, message: 'EV parking slots must be between 0 and 30', severity: 'error' });
+        return;
+      }
+      const parkingFeeNum = stationForm.parkingFee === '' ? 0 : parseFloat(stationForm.parkingFee);
+      if (Number.isNaN(parkingFeeNum) || parkingFeeNum < 0 || parkingFeeNum > 1000) {
+        setSnackbar({ open: true, message: 'Parking fee must be between 0 and 1000', severity: 'error' });
+        return;
+      }
+
+      // Prefer DMS input if provided
+      let latitude = parseFloat(stationForm.latitude) || 0;
+      let longitude = parseFloat(stationForm.longitude) || 0;
+      if (stationForm.locationDms && stationForm.locationDms.trim()) {
+        const parsed = parseDmsToDecimal(stationForm.locationDms.trim());
+        if (!parsed) {
+          setSnackbar({ open: true, message: 'Invalid DMS location. Example: 9°32\'41.5"N 76°49\'02.8"E', severity: 'error' });
+          return;
+        }
+        latitude = parsed.lat;
+        longitude = parsed.lng;
+      }
+
+      const stationData = {
+        ...stationForm,
+        totalChargers: totalChargersNum,
+        maxPowerPerCharger: maxPowerNum,
+        // Send undefined if empty so backend computes automatically
+        totalPowerCapacity: stationForm.totalPowerCapacity !== '' ? (parseFloat(stationForm.totalPowerCapacity) || 0) : undefined,
+        pricePerMinute: ppmNum,
+        parkingSlots: parkingSlotsNum,
+        parkingFee: parkingFeeNum,
+        latitude,
+        longitude
+      };
+
+      await stationManagerService.updateStation((stationDialog.station.id || stationDialog.station._id), stationData);
+      setSnackbar({ open: true, message: 'Station updated successfully', severity: 'success' });
+
+      setStationDialog({ open: false, mode: 'view', station: null });
+      // Refresh data
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error saving station:', error);
+      setSnackbar({ open: true, message: error.message || 'Failed to save station', severity: 'error' });
+    } finally {
+      setStationLoading(false);
+    }
+  };
+
+  const handleImageUpload = async (event, stationId) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    
+    try {
+      setImageUploadLoading(prev => ({ ...prev, [stationId]: true }));
+      
+      const res = await stationManagerService.uploadStationImages(stationId, files);
+      if (!res.success) throw new Error(res.message || 'Failed to upload images');
+      
+      setSnackbar({ open: true, message: 'Images uploaded successfully', severity: 'success' });
+      
+      // Refresh dashboard data to show updated images
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      setSnackbar({ open: true, message: error.message || 'Failed to upload images', severity: 'error' });
+    } finally {
+      setImageUploadLoading(prev => ({ ...prev, [stationId]: false }));
+      // Reset the file input
+      event.target.value = '';
+    }
   };
 
   const renderOverview = () => (
@@ -332,7 +607,6 @@ const StationManagerDashboard = () => {
                 {dashboardData?.assignedStations?.map((station, index) => (
                   <Box
                     key={station.id}
-                    onClick={() => navigate(`/station-manager/stations/${station.id}`)}
                     sx={{
                       mb: 3,
                       p: 3,
@@ -340,7 +614,6 @@ const StationManagerDashboard = () => {
                       borderColor: 'grey.200',
                       borderRadius: 2,
                       backgroundColor: 'grey.50',
-                      cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       '&:hover': { boxShadow: 3, borderColor: 'primary.light', backgroundColor: '#ffffff' }
                     }}
@@ -475,6 +748,48 @@ const StationManagerDashboard = () => {
                         </Box>
                       )}
                     </Box>
+
+                    {/* Action Buttons */}
+                    <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
+                      <Button 
+                        variant="outlined" 
+                        startIcon={<PhotoCameraIcon />} 
+                        component="label"
+                        disabled={imageUploadLoading[station.id]}
+                      >
+                        {imageUploadLoading[station.id] ? 'Uploading...' : 'Upload Images'}
+                        <input 
+                          type="file" 
+                          hidden 
+                          multiple 
+                          accept="image/*" 
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleImageUpload(e, station.id);
+                          }}
+                        />
+                      </Button>
+                      <Button 
+                        variant="outlined" 
+                        startIcon={<EditIcon />} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditStation(station);
+                        }}
+                      >
+                        Edit Station
+                      </Button>
+                      <Button 
+                        variant="outlined" 
+                        startIcon={<ViewIcon />} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/station-manager/stations/${station.id}`);
+                        }}
+                      >
+                        View Details
+                      </Button>
+                    </Box>
                   </Box>
                 )) || (
                   <Typography variant="body2" color="text.secondary">
@@ -511,7 +826,6 @@ const StationManagerDashboard = () => {
       </Grid>
     </Box>
   );
-
   const renderContent = () => {
     switch (activeSection) {
       case 'overview':
@@ -666,6 +980,182 @@ const StationManagerDashboard = () => {
                                 booking.status === 'confirmed' ? 'success' : 
                                 booking.status === 'pending' ? 'warning' : 
                                 booking.status === 'cancelled' ? 'error' : 'default'
+                              } 
+                              size="small" 
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              ₹{booking.cost}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Box display="flex" gap={1}>
+                              <Button 
+                                size="small" 
+                                startIcon={<ViewIcon />}
+                                onClick={() => handleViewBooking(booking)}
+                                variant="outlined"
+                              >
+                                View
+                              </Button>
+                              {booking.status === 'pending' && (
+                                <Button 
+                                  size="small" 
+                                  startIcon={<CheckCircle />}
+                                  onClick={() => handleApproveBooking(booking.id)}
+                                  color="success"
+                                  variant="contained"
+                                >
+                                  Approve
+                                </Button>
+                              )}
+                              {booking.status !== 'cancelled' && booking.status !== 'completed' && (
+                                <Button 
+                                  size="small" 
+                                  startIcon={<DeleteIcon />}
+                                  onClick={() => handleCancelBooking(booking.id)}
+                                  color="error"
+                                  variant="outlined"
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )) || []}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          </Box>
+        );
+      case 'maintenance':
+        return (
+          <Box>
+            <Typography variant="h4" gutterBottom sx={{ color: 'text.primary', fontWeight: 'bold' }}>
+              Maintenance Scheduling
+            </Typography>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 3 }}>
+              Schedule and manage maintenance activities for your assigned stations
+            </Typography>
+            
+            {/* Upcoming Maintenance */}
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Upcoming Maintenance ({dashboardData?.upcomingMaintenance?.length || 0})
+                </Typography>
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Station</TableCell>
+                        <TableCell>Charger</TableCell>
+                        <TableCell>Time Slot</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {dashboardData?.upcomingMaintenance?.map((maintenance) => (
+                        <TableRow key={maintenance.id}>
+                          <TableCell>{maintenance.stationName}</TableCell>
+                          <TableCell>{maintenance.chargerId}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {maintenance.startTime} - {maintenance.endTime}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={maintenance.status} 
+                              color={
+                                maintenance.status === 'scheduled' ? 'warning' : 
+                                maintenance.status === 'completed' ? 'success' : 
+                                maintenance.status === 'cancelled' ? 'error' : 'default'
+                              } 
+                              size="small" 
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Box display="flex" gap={1}>
+                              <Button 
+                                size="small" 
+                                startIcon={<ViewIcon />}
+                                onClick={() => handleViewMaintenance(maintenance)}
+                                variant="outlined"
+                              >
+                                View
+                              </Button>
+                              {maintenance.status === 'scheduled' && (
+                                <Button 
+                                  size="small" 
+                                  startIcon={<EditIcon />}
+                                  onClick={() => handleEditMaintenance(maintenance.id)}
+                                  variant="outlined"
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                              {maintenance.status !== 'completed' && maintenance.status !== 'cancelled' && (
+                                <Button 
+                                  size="small" 
+                                  startIcon={<DeleteIcon />}
+                                  onClick={() => handleCancelMaintenance(maintenance.id)}
+                                  color="error"
+                                  variant="outlined"
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )) || []}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+
+            {/* Recent Maintenance */}
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Recent Maintenance</Typography>
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Station</TableCell>
+                        <TableCell>Charger</TableCell>
+                        <TableCell>Time Slot</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {dashboardData?.recentMaintenance?.slice(0, 10).map((maintenance) => (
+                        <TableRow key={maintenance.id}>
+                          <TableCell>{maintenance.stationName}</TableCell>
+                          <TableCell>{maintenance.chargerId}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {maintenance.startTime}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {maintenance.endTime}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={maintenance.status} 
+                              color={
+                                maintenance.status === 'scheduled' ? 'warning' : 
+                                maintenance.status === 'completed' ? 'success' : 
+                                maintenance.status === 'cancelled' ? 'error' : 'default'
                               } 
                               size="small" 
                             />
@@ -1288,6 +1778,453 @@ const StationManagerDashboard = () => {
         {/* Footer */}
         <Footer />
       </Box>
+
+      {/* Station Form Dialog */}
+      <Dialog 
+        open={stationDialog.open} 
+        onClose={() => setStationDialog({ open: false, mode: 'view', station: null })}
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{
+          sx: { minHeight: '80vh' }
+        }}
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={2}>
+            <EvStationIcon color="primary" />
+            <Typography variant="h6">
+              {stationDialog.mode === 'view' ? 'View Station' : 'Edit Station'}
+            </Typography>
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent dividers>
+          <Box sx={{ mt: 2 }}>
+            {/* Basic Station Info */}
+            <Accordion defaultExpanded>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>  
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Business color="primary" />
+                  <Typography variant="h6">Basic Station Information</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Station Name"
+                      value={stationForm.name}
+                      onChange={(e) => setStationForm({ ...stationForm, name: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                      helperText="e.g., NexCharge Kochi Central"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Station Code/ID"
+                      value={stationForm.code}
+                      disabled
+                      helperText="Unique identifier"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Description"
+                      value={stationForm.description}
+                      onChange={(e) => setStationForm({ ...stationForm, description: e.target.value })}
+                      multiline
+                      rows={2}
+                      disabled={stationDialog.mode === 'view'}
+                      helperText="Short description of the station"
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+
+            {/* Location Information */}
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <LocationOn color="primary" />
+                  <Typography variant="h6">Location Information</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Full Address"
+                      value={stationForm.address}
+                      onChange={(e) => setStationForm({ ...stationForm, address: e.target.value })}
+                      required
+                      multiline
+                      rows={2}
+                      disabled={stationDialog.mode === 'view'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="City"
+                      value={stationForm.city}
+                      onChange={(e) => setStationForm({ ...stationForm, city: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="State"
+                      value={stationForm.state}
+                      onChange={(e) => setStationForm({ ...stationForm, state: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Pin Code"
+                      value={stationForm.pincode}
+                      onChange={(e) => setStationForm({ ...stationForm, pincode: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Location (DMS)"
+                      placeholder={`9°32'41.5"N 76°49'02.8"E`}
+                      value={stationForm.locationDms}
+                      onChange={(e) => setStationForm({ ...stationForm, locationDms: e.target.value })}
+                      disabled={stationDialog.mode === 'view'}
+                      helperText={`Enter coordinates in DMS format or pick on the map below`}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <GoogleMapsLocationPicker
+                      value={{ lat: Number(stationForm.latitude) || undefined, lng: Number(stationForm.longitude) || undefined }}
+                      onChange={({ lat, lng, dms }) => {
+                        setStationForm({
+                          ...stationForm,
+                          latitude: lat,
+                          longitude: lng,
+                          locationDms: dms,
+                        });
+                      }}
+                      initialCenter={{ lat: 9.9312, lng: 76.2673 }}
+                      height={280}
+                      disabled={stationDialog.mode === 'view'}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Nearby Landmarks"
+                      value={stationForm.nearbyLandmarks}
+                      onChange={(e) => setStationForm({ ...stationForm, nearbyLandmarks: e.target.value })}
+                      disabled={stationDialog.mode === 'view'}
+                      helperText="Optional: Helps users find the station easily"
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+
+            {/* Station Capacity & Chargers */}
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Power color="primary" />
+                  <Typography variant="h6">Station Capacity & Chargers</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Total Number of Chargers"
+                      type="number"
+                      value={stationForm.totalChargers}
+                      onChange={(e) => setStationForm({ ...stationForm, totalChargers: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                      inputProps={{ min: 1, max: 50 }}
+                      helperText="Enter a value between 1 and 50"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Max Power per Charger (kW)"
+                      type="number"
+                      value={stationForm.maxPowerPerCharger}
+                      onChange={(e) => setStationForm({ ...stationForm, maxPowerPerCharger: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                      inputProps={{ min: 1, max: 500, step: 0.1 }}
+                      helperText="Enter a value between 1 and 500 kW"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Total Power Capacity (kW)"
+                      type="number"
+                      value={stationForm.totalPowerCapacity}
+                      onChange={(e) => setStationForm({ ...stationForm, totalPowerCapacity: e.target.value })}
+                      disabled={stationDialog.mode === 'view'}
+                      inputProps={{ min: 0, step: 0.1 }}
+                      helperText="Optional: Auto-calculated if left empty"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth required disabled={stationDialog.mode === 'view'}>
+                      <InputLabel>Charger Types Supported</InputLabel>
+                      <Select
+                        multiple
+                        value={stationForm.chargerTypes}
+                        onChange={(e) => setStationForm({ ...stationForm, chargerTypes: e.target.value })}
+                        renderValue={(selected) => selected.join(', ')}
+                      >
+                        <SelectMenuItem value="type1">Type 1 (SAE J1772)</SelectMenuItem>
+                        <SelectMenuItem value="type2">Type 2 (IEC Type 2)</SelectMenuItem>
+                        <SelectMenuItem value="bharat_ac_001">Bharat AC-001</SelectMenuItem>
+                        <SelectMenuItem value="bharat_dc_001">Bharat DC-001</SelectMenuItem>
+                        <SelectMenuItem value="ccs2">CCS-2</SelectMenuItem>
+                        <SelectMenuItem value="chademo">CHAdeMO</SelectMenuItem>
+                        <SelectMenuItem value="gbt_type6">GB/T Type-6</SelectMenuItem>
+                        <SelectMenuItem value="type7_leccs">Type-7 (LECCS)</SelectMenuItem>
+                        <SelectMenuItem value="mcs">Megawatt Charging System (MCS)</SelectMenuItem>
+                        <SelectMenuItem value="chaoji">ChaoJi</SelectMenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+
+            {/* Pricing & Policies (Per-Minute only) */}
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <MoneyIcon color="primary" />
+                  <Typography variant="h6">Pricing & Policies</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Price Per Minute (₹/min)"
+                      type="number"
+                      value={stationForm.pricePerMinute}
+                      onChange={(e) => setStationForm({ ...stationForm, pricePerMinute: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                      inputProps={{ min: 1, max: 5000, step: 0.01 }}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start">₹</InputAdornment>
+                      }}
+                      helperText="Enter a value between ₹1 and ₹5000"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Cancellation Policy"
+                      value={stationForm.cancellationPolicy}
+                      onChange={(e) => setStationForm({ ...stationForm, cancellationPolicy: e.target.value })}
+                      multiline
+                      rows={3}
+                      disabled={stationDialog.mode === 'view'}
+                      helperText="Describe your cancellation and refund policy"
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+
+            {/* Operational Details */}
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Settings color="primary" />
+                  <Typography variant="h6">Operational Details</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth required disabled={stationDialog.mode === 'view'}>
+                      <InputLabel>Station Status</InputLabel>
+                      <Select
+                        value={stationForm.status}
+                        onChange={(e) => setStationForm({ ...stationForm, status: e.target.value })}
+                      >
+                        <SelectMenuItem value="active">Active</SelectMenuItem>
+                        <SelectMenuItem value="inactive">Inactive</SelectMenuItem>
+                        <SelectMenuItem value="maintenance">Under Maintenance</SelectMenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Number of EV Parking Slots"
+                      type="number"
+                      value={stationForm.parkingSlots}
+                      onChange={(e) => setStationForm({ ...stationForm, parkingSlots: e.target.value })}
+                      required
+                      disabled={stationDialog.mode === 'view'}
+                      inputProps={{ min: 1 }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Parking Fee (₹)"
+                      type="number"
+                      value={stationForm.parkingFee}
+                      onChange={(e) => setStationForm({ ...stationForm, parkingFee: e.target.value })}
+                      disabled={stationDialog.mode === 'view'}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      helperText="Leave empty if parking is free"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={stationForm.is24Hours}
+                          onChange={(e) => setStationForm({ ...stationForm, is24Hours: e.target.checked })}
+                          disabled={stationDialog.mode === 'view'}
+                        />
+                      }
+                      label="24/7 Operation"
+                    />
+                  </Grid>
+                  {!stationForm.is24Hours && (
+                    <>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Opening Time"
+                          type="time"
+                          value={stationForm.customHours.start}
+                          onChange={(e) => setStationForm({ 
+                            ...stationForm, 
+                            customHours: { ...stationForm.customHours, start: e.target.value }
+                          })}
+                          InputLabelProps={{ shrink: true }}
+                          disabled={stationDialog.mode === 'view'}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Closing Time"
+                          type="time"
+                          value={stationForm.customHours.end}
+                          onChange={(e) => setStationForm({ 
+                            ...stationForm, 
+                            customHours: { ...stationForm.customHours, end: e.target.value }
+                          })}
+                          InputLabelProps={{ shrink: true }}
+                          disabled={stationDialog.mode === 'view'}
+                        />
+                      </Grid>
+                    </>
+                  )}
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+
+            {/* Contact & Ownership */}
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <People color="primary" />
+                  <Typography variant="h6">Contact & Ownership</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Support Phone Number"
+                      value={stationForm.supportPhone}
+                      onChange={(e) => setStationForm({ ...stationForm, supportPhone: e.target.value })}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start">+91</InputAdornment>
+                      }}
+                      disabled={stationDialog.mode === 'view'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Support Email"
+                      type="email"
+                      value={stationForm.supportEmail}
+                      onChange={(e) => setStationForm({ ...stationForm, supportEmail: e.target.value })}
+                      disabled={stationDialog.mode === 'view'}
+                      helperText="Customer support email for this station"
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => setStationDialog({ open: false, mode: 'view', station: null })}
+            disabled={stationLoading}
+          >
+            Close
+          </Button>
+          {stationDialog.mode === 'view' ? (
+            <Button 
+              onClick={() => setStationDialog({ ...stationDialog, mode: 'edit' })}
+              variant="contained"
+              startIcon={<EditIcon />}
+            >
+              Edit Station
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleStationSubmit}
+              variant="contained"
+              disabled={stationLoading}
+              sx={{
+                background: 'linear-gradient(135deg, #00b894, #00a085)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #00a085, #00b894)'
+                }
+              }}
+            >
+              {stationLoading ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                'Update Station'
+              )}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar for notifications */}
       <Snackbar

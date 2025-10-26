@@ -227,6 +227,11 @@ const StationSchema = new mongoose.Schema({
       default: 0,
       min: 0
     },
+    totalReviews: { 
+      type: Number, 
+      default: 0,
+      min: 0
+    },
     totalRevenue: { 
       type: Number, 
       default: 0,

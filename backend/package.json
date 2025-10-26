@@ -11,10 +11,12 @@
     "seed:admin": "node src/scripts/seedAdmin.js",
     "test:email": "node test-email.js",
     "check:env": "node check-env.js",
-    "lint": "echo 'no linter configured'"
+    "lint": "echo 'no linter configured'",
+    "update:reviews": "node src/scripts/updateStationReviews.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -30,6 +32,7 @@
     "mongoose": "^8.5.1",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",

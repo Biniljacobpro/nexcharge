@@ -334,33 +334,31 @@ const UserHomePage = () => {
                         </Typography>
                         
                         {/* OTP Input Section */}
-                        {canStartCharging && !isChargingStopped && (
+                        {canStartCharging && !isChargingStopped && !isChargingStarted && (
                           <Box sx={{ mt: 2, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
                             <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-                              {isChargingStarted ? '🔋 Charging Active' : '🔐 Enter OTP to Start Charging'}
+                              🔐 Enter OTP to Start Charging
                             </Typography>
                             
-                            {!isChargingStarted && (
-                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
-                                <TextField
-                                  size="small"
-                                  placeholder="6-digit OTP"
-                                  value={otpInput}
-                                  onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                  sx={{ width: 120 }}
-                                  disabled={otpLoading}
-                                />
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  color="primary"
-                                  disabled={otpInput.length !== 6 || otpLoading}
-                                  onClick={() => handleVerifyOTP(next._id, otpInput)}
-                                >
-                                  {otpLoading ? 'Verifying...' : 'Start'}
-                                </Button>
-                              </Box>
-                            )}
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                              <TextField
+                                size="small"
+                                placeholder="6-digit OTP"
+                                value={otpInput}
+                                onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                sx={{ width: 120 }}
+                                disabled={otpLoading}
+                              />
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                disabled={otpInput.length !== 6 || otpLoading}
+                                onClick={() => handleVerifyOTP(next._id, otpInput)}
+                              >
+                                {otpLoading ? 'Verifying...' : 'Start'}
+                              </Button>
+                            </Box>
                             
                             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                               <Button
@@ -371,19 +369,38 @@ const UserHomePage = () => {
                               >
                                 {otpLoading ? 'Sending...' : '📧 Get OTP'}
                               </Button>
-                              
-                              {isChargingStarted && (
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  color="error"
-                                  onClick={() => handleStopCharging(next._id)}
-                                  disabled={otpLoading}
-                                >
-                                  {otpLoading ? 'Stopping...' : '⏹️ Stop Charging'}
-                                </Button>
-                              )}
                             </Box>
+                          </Box>
+                        )}
+                        
+                        {/* Charging Active Section */}
+                        {isChargingStarted && !isChargingStopped && (
+                          <Box sx={{ mt: 2, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
+                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+                              🔋 Charging Active
+                            </Typography>
+                            
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="error"
+                              onClick={() => handleStopCharging(next._id)}
+                              disabled={otpLoading}
+                            >
+                              {otpLoading ? 'Stopping...' : '⏹️ Stop Charging'}
+                            </Button>
+                          </Box>
+                        )}
+                        
+                        {/* Charging Completed Section */}
+                        {isChargingStopped && (
+                          <Box sx={{ mt: 2, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
+                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: '#059669' }}>
+                              ✅ Charging Completed
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              This session has been completed
+                            </Typography>
                           </Box>
                         )}
                       </Grid>

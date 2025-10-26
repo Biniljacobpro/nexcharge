@@ -19,6 +19,8 @@ import vehicleRequestRoutes from './routes/vehicleRequest.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import availabilityRoutes from './routes/availability.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import reviewRoutes from './routes/review.routes.js';
+import uploadRoutes from '../routes/uploadExample.js';
 import { startBookingReminderJob } from './jobs/bookingReminder.job.js';
 // Removed deprecated corporate application routes
 
@@ -71,6 +73,8 @@ app.use('/api/vehicle-requests', vehicleRequestRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/upload', uploadRoutes);
 // app.use('/api/corporates', corporateApplicationRoutes); // deprecated
 
 // Error handler

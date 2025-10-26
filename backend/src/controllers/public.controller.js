@@ -6,7 +6,7 @@ export const getPublicStations = async (req, res) => {
   try {
     // Show stations that are active or under maintenance (hide inactive)
     const stations = await Station.find({ 'operational.status': { $in: ['active', 'maintenance'] } })
-      .select('name location capacity pricing operational images')
+      .select('name location capacity pricing operational images analytics')
       .lean();
 
     const stationsWithAvailability = stations.map(s => ({

@@ -23,8 +23,10 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadIcon from '@mui/icons-material/Upload';
 import SaveIcon from '@mui/icons-material/Save';
-import stationManagerService from '../services/stationManagerService';
 import DeleteIcon from '@mui/icons-material/Delete';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import EvStationIcon from '@mui/icons-material/EvStation';
+import stationManagerService from '../services/stationManagerService';
 
 const CHARGER_TYPES = ['type1', 'type2', 'bharat_ac_001', 'bharat_dc_001', 'ccs2', 'chademo', 'gbt_type6', 'type7_leccs', 'mcs', 'chaoji'];
 const PRICING_MODELS = ['per_kwh', 'per_minute', 'flat_fee', 'dynamic'];
@@ -40,12 +42,18 @@ const StationManagerStationDetails = () => {
   const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000/api';
   const API_ORIGIN = API_BASE.replace(/\/api$/,'');
 
+
   const loadDetails = async () => {
     try {
       setLoading(true);
       const res = await stationManagerService.getStationDetails(id);
-      if (res.success) setStation(res.data);
-      else throw new Error(res.message || 'Failed to load station');
+      if (res.success) {
+        console.log('Station data from API:', res.data);
+        console.log('Station images:', res.data.images);
+        setStation(res.data);
+      } else {
+        throw new Error(res.message || 'Failed to load station');
+      }
     } catch (e) {
       setSnackbar({ open: true, message: e.message, severity: 'error' });
     } finally {
@@ -301,31 +309,107 @@ const StationManagerStationDetails = () => {
           <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Images</Typography>
-                <Grid container spacing={1}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Station Photos & Gallery</Typography>
+                <Grid container spacing={2}>
                   {(station.images || []).length === 0 && (
                     <Grid item xs={12}>
-                      <Typography variant="body2" color="text.secondary">No images uploaded yet.</Typography>
-                    </Grid>
-                  )}
-                  {(station.images || []).map((url, idx) => (
-                    <Grid item xs={6} key={idx}>
-                      <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
-                        <img alt={`station-${idx}`} src={`${API_ORIGIN}${url}`} style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="error"
-                          onClick={() => handleDeleteImage(url)}
-                          startIcon={<DeleteIcon />}
-                          sx={{ position: 'absolute', top: 8, right: 8, borderRadius: 2, minHeight: 0, py: 0.25 }}
-                        >
-                          Delete
-                        </Button>
+                      <Box sx={{ textAlign: 'center', py: 3 }}>
+                        <EvStationIcon sx={{ fontSize: 48, color: 'grey.400', mb: 1 }} />
+                        <Typography variant="body2" color="text.secondary">
+                          High-quality photos of charging bays, facilities, and surroundings coming soon
+                        </Typography>
                       </Box>
                     </Grid>
-                  ))}
+                  )}
+
+                  {/* Display uploaded images in the left column */}
+                  <Grid item xs={12} md={8}>
+                    <Grid container spacing={2}>
+                      {(station.images || []).map((url, idx) => (
+                        <Grid item xs={12} key={idx}>
+                          <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                            <img 
+                              alt={`station-${idx}`} 
+                              src={url || 'https://via.placeholder.com/400x300/cccccc/ffffff?text=No+Image'}
+                              style={{ width: '100%', height: 'auto', display: 'block' }} 
+                              onError={(e) => {
+                                console.log('Image load error for URL:', url);
+                                e.target.src = 'https://via.placeholder.com/400x300/cccccc/ffffff?text=No+Image'; // Better fallback image
+                              }}
+                            />
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="error"
+                              onClick={() => handleDeleteImage(url)}
+                              startIcon={<DeleteIcon />}
+                              sx={{ position: 'absolute', top: 8, right: 8, borderRadius: 2, minHeight: 0, py: 0.25 }}
+                            >
+                              Delete
+                            </Button>
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Grid>
+                  
+                  {/* Display thumbnails in the right column */}
+                  <Grid item xs={12} md={4}>
+                    <Stack spacing={1}>
+                      {Array.from({ length: Math.max(3, (station.images || []).length) }).map((_, idx) => (
+                        <Box 
+                          key={idx} 
+                          sx={{ 
+                            height: 80, 
+                            border: '1px dashed #ccc', 
+                            borderRadius: 1, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            backgroundColor: '#f5f5f5',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {(station.images || [])[idx] ? (
+                            <img 
+                              src={(station.images || [])[idx] || 'https://via.placeholder.com/80x80/cccccc/ffffff?text=No+Image'}
+                              alt={`thumb-${idx}`} 
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                console.log('Thumbnail load error for URL:', (station.images || [])[idx]);
+                                e.target.src = 'https://via.placeholder.com/80x80/cccccc/ffffff?text=No+Image';
+                              }}
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              Photo {idx + 1}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Grid>
                 </Grid>
+                
+                {/* Upload Button */}
+                <Box sx={{ mt: 2 }}>
+                  <Button 
+                    variant="outlined" 
+                    component="label" 
+                    startIcon={<PhotoCameraIcon />} 
+                    fullWidth
+                    disabled={imagesUploading}
+                  >
+                    {imagesUploading ? 'Uploading...' : 'Upload New Images'}
+                    <input 
+                      type="file" 
+                      hidden 
+                      multiple 
+                      accept="image/*" 
+                      onChange={handleImageUpload} 
+                    />
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           </Grid>

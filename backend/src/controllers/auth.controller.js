@@ -543,8 +543,15 @@ export const uploadProfileImage = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Create the image URL (you might want to use a CDN or cloud storage in production)
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    // Handle both Cloudinary URLs and local file paths
+    let imageUrl;
+    if (req.file.path && (req.file.path.startsWith('http') || req.file.path.startsWith('https'))) {
+      // Cloudinary URL
+      imageUrl = req.file.path;
+    } else {
+      // Local file path
+      imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    }
     
     // Update profile image
     user.personalInfo.profileImage = imageUrl;

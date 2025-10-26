@@ -471,6 +471,8 @@ export const getStationDetails = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Station not found' });
     }
 
+    console.log('Station images from database:', station.images);
+
     return res.json({ success: true, data: station });
   } catch (error) {
     console.error('Error fetching station details:', error);
@@ -547,10 +549,74 @@ export const uploadStationImages = async (req, res) => {
     const station = await Station.findById(id);
     if (!station) return res.status(404).json({ success: false, message: 'Station not found' });
 
-    const files = (req.files || []).map(f => `/${f.path.replace(/\\/g, '/')}`);
-    station.images = [...(station.images || []), ...files];
+    // Debug logging
+    console.log('Upload request files:', JSON.stringify(req.files, null, 2));
+
+    // Process uploaded files - handle both Cloudinary and local storage
+    let files = [];
+    if (req.files && Array.isArray(req.files)) {
+      // Handle array of files
+      files = req.files.map(f => {
+        console.log('Processing file (array):', JSON.stringify(f, null, 2));
+        // If it's a Cloudinary URL, use it directly
+        if (f.path && (f.path.startsWith('http://') || f.path.startsWith('https://'))) {
+          console.log('Detected Cloudinary URL:', f.path);
+          console.log('Path length:', f.path.length);
+          console.log('First 50 characters:', f.path.substring(0, 50));
+          return f.path;
+        }
+        // Otherwise, it's a local file path
+        console.log('Detected local file, constructing path from:', f.path);
+        return `/${f.path.replace(/\\/g, '/')}`;
+      });
+    } else if (req.files && req.files.images && Array.isArray(req.files.images)) {
+      // Handle multer.fields format
+      files = req.files.images.map(f => {
+        console.log('Processing file (images):', JSON.stringify(f, null, 2));
+        // Check if it's a Cloudinary URL (starts with http/https)
+        if (f.path && (f.path.startsWith('http://') || f.path.startsWith('https://'))) {
+          console.log('Detected Cloudinary URL:', f.path);
+          console.log('Path length:', f.path.length);
+          console.log('First 50 characters:', f.path.substring(0, 50));
+          return f.path;
+        }
+        // For local storage, multer gives us filename, not path
+        if (f.filename) {
+          console.log('Detected local file, constructing path from filename:', f.filename);
+          return `/uploads/${f.filename}`;
+        }
+        // Fallback
+        console.log('Fallback, constructing path from:', f.path);
+        return `/${f.path.replace(/\\/g, '/')}`;
+      });
+    }
+
+    console.log('Processed files to store:', files);
+
+    // Additional debugging to check if files already have the API origin prefix
+    const processedFiles = files.map(file => {
+      console.log('Processing file for storage:', file);
+      // If the file already starts with the API origin, remove it
+      const apiOrigin = process.env.API_BASE || 'http://localhost:4000';
+      console.log('API Origin:', apiOrigin);
+      if (file.startsWith(apiOrigin)) {
+        const correctedPath = file.substring(apiOrigin.length);
+        console.log('Corrected file path from', file, 'to', correctedPath);
+        return correctedPath;
+      }
+      // Also check if it's already an absolute URL
+      if (file.startsWith('http://') || file.startsWith('https://')) {
+        console.log('File is already an absolute URL:', file);
+        return file;
+      }
+      return file;
+    });
+
+    station.images = [...(station.images || []), ...processedFiles];
     station.updatedBy = userId;
     await station.save();
+
+    console.log('Final station images array:', station.images);
 
     return res.json({ success: true, message: 'Images uploaded successfully', data: station.images });
   } catch (error) {
