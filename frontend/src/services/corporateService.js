@@ -1,4 +1,7 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://nexcharge-qu9o.vercel.app/api' 
+    : 'http://localhost:4000/api');
 
 class CorporateService {
   async makeRequest(endpoint, options = {}) {
@@ -192,4 +195,3 @@ class CorporateService {
 }
 
 export default new CorporateService();
-

@@ -66,6 +66,16 @@ const createTransporter = async () => {
   throw new Error('Email transport is not configured. Provide either EMAIL_USER + EMAIL_APP_PASSWORD, SMTP_* settings, or Google OAuth2 credentials.');
 };
 
+// Determine the correct frontend URL based on environment
+const getFrontendUrl = () => {
+  // In production, use the Vercel frontend URL
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://nexcharge.vercel.app';
+  }
+  // In development, use localhost
+  return 'http://localhost:3000';
+};
+
 // Send approval email
 export const sendApprovalEmail = async (application, user, password) => {
   try {
@@ -98,7 +108,7 @@ export const sendApprovalEmail = async (application, user, password) => {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/login" 
+              <a href="${getFrontendUrl()}/login" 
                  style="background: linear-gradient(135deg, #00b894, #00a085); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; box-shadow: 0 4px 15px rgba(0,184,148,0.3);">
                 🚀 Access Your Dashboard
               </a>
@@ -183,7 +193,7 @@ export const sendRejectionEmail = async (application, reviewNotes) => {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/apply-corporate" 
+              <a href="${getFrontendUrl()}/apply-corporate" 
                  style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; box-shadow: 0 4px 15px rgba(52,152,219,0.3);">
                 🔄 Reapply in the Future
               </a>
@@ -330,7 +340,7 @@ export const sendCorporateAdminWelcomeEmail = async ({ companyName, companyEmail
                <strong>Temporary password:</strong> ${tempPassword}</p>
             <p style="color:#e67e22;"><strong>Important:</strong> Please change your password after your first login.</p>
             <div style="text-align:center; margin-top: 16px;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
+              <a href="${getFrontendUrl()}/login" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
             </div>
           </div>
           <p style="text-align:center;color:#95a5a6;font-size:12px;margin-top:12px;">© 2025 NexCharge</p>
@@ -368,7 +378,7 @@ export const sendFranchiseManagerWelcomeEmail = async ({ managerName, managerEma
                <strong>Temporary password:</strong> ${tempPassword}</p>
             <p style="color:#e67e22;"><strong>Important:</strong> You will be asked to change this password on first login.</p>
             <div style="text-align:center; margin-top: 16px;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" style="background:#1976d2;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
+              <a href="${getFrontendUrl()}/login" style="background:#1976d2;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
             </div>
           </div>
           <p style="text-align:center;color:#95a5a6;font-size:12px;margin-top:12px;">© 2025 NexCharge</p>
@@ -406,7 +416,7 @@ export const sendFranchiseOwnerWelcomeEmail = async ({ ownerName, ownerEmail, te
                <strong>Temporary password:</strong> ${tempPassword}</p>
             <p style="color:#e67e22;"><strong>Important:</strong> Please change your password after your first login.</p>
             <div style="text-align:center; margin-top: 16px;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
+              <a href="${getFrontendUrl()}/login" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
             </div>
           </div>
           <p style="text-align:center;color:#95a5a6;font-size:12px;margin-top:12px;">© 2025 NexCharge</p>
@@ -443,7 +453,7 @@ export const sendStationManagerWelcomeEmail = async ({ managerName, managerEmail
                <strong>Temporary password:</strong> ${tempPassword}</p>
             <p style="color:#e67e22;"><strong>Important:</strong> You will be asked to change this password on first login for security purposes.</p>
             <div style="text-align:center; margin-top: 16px;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
+              <a href="${getFrontendUrl()}/login" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Go to Login</a>
             </div>
           </div>
           <p style="text-align:center;color:#95a5a6;font-size:12px;margin-top:12px;">© 2025 NexCharge</p>
@@ -484,9 +494,9 @@ export const sendPasswordResetOtpEmail = async ({ recipientEmail, recipientName,
               </div>
             </div>
             <p style="color:#e67e22;"><strong>Note:</strong> This code will expire in 10 minutes. Do not share it with anyone.</p>
-            <p>If you didn’t request this, you can safely ignore this email.</p>
+            <p>If you didn't request this, you can safely ignore this email.</p>
             <div style="text-align:center; margin-top: 16px;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/forgot-password" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Enter OTP</a>
+              <a href="${getFrontendUrl()}/forgot-password" style="background:#00b894;color:#fff;padding:12px 18px;border-radius:24px;text-decoration:none;display:inline-block;">Enter OTP</a>
             </div>
           </div>
           <p style="text-align:center;color:#95a5a6;font-size:12px;margin-top:12px;">© 2025 NexCharge</p>
@@ -566,7 +576,7 @@ export const sendBookingConfirmationEmail = async (booking, user, station) => {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/bookings" 
+              <a href="${getFrontendUrl()}/bookings" 
                  style="background: linear-gradient(135deg, #00b894, #00a085); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; box-shadow: 0 4px 15px rgba(0,184,148,0.3);">
                 📋 View Your Booking
               </a>

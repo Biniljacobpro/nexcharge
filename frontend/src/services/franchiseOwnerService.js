@@ -1,7 +1,10 @@
 import { authFetch } from '../utils/api';
 
 // Always call the backend API host, not a relative path to the frontend
-const API_BASE = `${process.env.REACT_APP_API_BASE || 'http://localhost:4000/api'}/franchise-owner`;
+const API_BASE = `${process.env.REACT_APP_API_BASE || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://nexcharge-qu9o.vercel.app/api' 
+    : 'http://localhost:4000/api')}/franchise-owner`;
 
 export const franchiseOwnerService = {
   // Get dashboard overview data
@@ -249,108 +252,128 @@ export const franchiseOwnerService = {
     }
   },
 
-  // Change password
-  changePassword: async (passwordData) => {
+  // Get bookings
+  getBookings: async (params = {}) => {
     try {
-      const response = await authFetch(`${API_BASE}/change-password`, {
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null) {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const response = await authFetch(`${API_BASE}/bookings?${queryParams}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch bookings');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      throw error;
+    }
+  },
+
+  // Update booking status
+  updateBookingStatus: async (bookingId, status) => {
+    try {
+      const response = await authFetch(`${API_BASE}/bookings/${bookingId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update booking status');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      throw error;
+    }
+  },
+
+  // Get revenue data
+  getRevenue: async (startDate, endDate) => {
+    try {
+      const response = await authFetch(`${API_BASE}/revenue?startDate=${startDate}&endDate=${endDate}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch revenue data');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching revenue data:', error);
+      throw error;
+    }
+  },
+
+  // Get user feedback
+  getUserFeedback: async () => {
+    try {
+      const response = await authFetch(`${API_BASE}/feedback`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch user feedback');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching user feedback:', error);
+      throw error;
+    }
+  },
+
+  // Respond to feedback
+  respondToFeedback: async (feedbackId, response) => {
+    try {
+      const res = await authFetch(`${API_BASE}/feedback/${feedbackId}/respond`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(passwordData),
+        body: JSON.stringify({ response }),
       });
-      if (!response.ok) {
-        throw new Error('Failed to change password');
+      if (!res.ok) {
+        throw new Error('Failed to respond to feedback');
       }
-      return await response.json();
+      return await res.json();
     } catch (error) {
-      console.error('Error changing password:', error);
+      console.error('Error responding to feedback:', error);
       throw error;
     }
   },
 
-  // Update profile
-  updateProfile: async (profileData) => {
+  // Get maintenance requests
+  getMaintenanceRequests: async () => {
     try {
-      const response = await authFetch(`${API_BASE}/profile`, {
-        method: 'PUT',
+      const response = await authFetch(`${API_BASE}/maintenance`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch maintenance requests');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching maintenance requests:', error);
+      throw error;
+    }
+  },
+
+  // Update maintenance request status
+  updateMaintenanceStatus: async (requestId, status) => {
+    try {
+      const response = await authFetch(`${API_BASE}/maintenance/${requestId}/status`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(profileData),
+        body: JSON.stringify({ status }),
       });
       if (!response.ok) {
-        throw new Error('Failed to update profile');
+        throw new Error('Failed to update maintenance status');
       }
       return await response.json();
     } catch (error) {
-      console.error('Error updating profile:', error);
-      throw error;
-    }
-  },
-
-  // Station manager assignment functions
-  getAvailableStationManagers: async () => {
-    try {
-      const response = await authFetch(`${API_BASE}/managers/available`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch available station managers');
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching available station managers:', error);
-      throw error;
-    }
-  },
-
-  getUnassignedStations: async () => {
-    try {
-      const response = await authFetch(`${API_BASE}/stations/unassigned`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch unassigned stations');
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching unassigned stations:', error);
-      throw error;
-    }
-  },
-
-  assignStationToManager: async (managerId, stationId) => {
-    try {
-      const response = await authFetch(`${API_BASE}/assign-station`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ managerId, stationId }),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to assign station to manager');
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error assigning station to manager:', error);
-      throw error;
-    }
-  },
-
-  unassignStationFromManager: async (managerId, stationId) => {
-    try {
-      const response = await authFetch(`${API_BASE}/unassign-station`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ managerId, stationId }),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to unassign station from manager');
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error unassigning station from manager:', error);
+      console.error('Error updating maintenance status:', error);
       throw error;
     }
   }
 };
+
+export default franchiseOwnerService;
