@@ -463,4 +463,71 @@ export const stopChargingApi = async (bookingId) => {
   return data;
 };
 
+// Add missing admin functions
+export const adminOverview = async () => {
+  const res = await authFetch(`${API_BASE}/admin/overview`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to load overview');
+  return data;
+};
+
+export const adminLiveStats = async () => {
+  const res = await authFetch(`${API_BASE}/admin/live-stats`, { cache: 'no-store' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to load live stats');
+  return data;
+};
+
+export const adminUsers = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const res = await authFetch(`${API_BASE}/admin/users${qs ? `?${qs}` : ''}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to load users');
+  return data;
+};
+
+export const adminUpdateUserStatus = async (id, status) => {
+  const res = await authFetch(`${API_BASE}/admin/users/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to update user status');
+  return data;
+};
+
+export const getCorporateAdmins = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const res = await authFetch(`${API_BASE}/admin/corporate-admins${qs ? `?${qs}` : ''}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to load corporate admins');
+  return data;
+};
+
+export const addCorporateAdmin = async (payload) => {
+  const res = await authFetch(`${API_BASE}/admin/corporate-admins`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to add corporate admin');
+  return data;
+};
+
+export const updateCorporateAdminStatus = async (id, status) => {
+  const res = await authFetch(`${API_BASE}/admin/corporate-admins/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error || 'Failed to update corporate admin status');
+  return data;
+};
+
+// Add authFetch as a named export
+export { authFetch };
+
 export default API_BASE;
