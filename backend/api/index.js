@@ -52,25 +52,6 @@ export default async function handler(request, response) {
   }
 
   // Pass the request to Express app
-  return new Promise((resolve) => {
-    // Create a mock response object that will call resolve when finished
-    const mockResponse = {
-      ...response,
-      status: (code) => {
-        response.status(code);
-        return mockResponse;
-      },
-      json: (data) => {
-        response.json(data);
-        resolve();
-      },
-      send: (data) => {
-        response.send(data);
-        resolve();
-      }
-    };
-
-    // Let Express handle the request
-    app(request, mockResponse);
-  });
+  // Use Express app directly without wrapping in a Promise
+  app(request, response);
 }
