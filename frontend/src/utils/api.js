@@ -77,6 +77,9 @@ export const googleSignInApi = async (idToken) => {
   return data;
 };
 
+// Alias for backward compatibility
+export const googleLoginApi = googleSignInApi;
+
 export const signupApi = async ({ firstName, lastName, email, password }) => {
   const res = await fetch(`${API_BASE}/auth/signup`, {
     method: 'POST',
@@ -93,6 +96,14 @@ export const signupApi = async ({ firstName, lastName, email, password }) => {
   return data;
 };
 
+// Add the missing checkEmailAvailabilityApi function
+export const checkEmailAvailabilityApi = async (email) => {
+  const res = await fetch(`${API_BASE}/auth/check-email?email=${encodeURIComponent(email)}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to check email availability');
+  return data;
+};
+
 export const logoutApi = async () => {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
@@ -105,6 +116,9 @@ export const meApi = async () => {
   return data;
 };
 
+// Add alias for getMe
+export const getMe = meApi;
+
 export const refreshApi = async (refreshToken) => {
   const res = await fetch(`${API_BASE}/auth/refresh`, {
     method: 'POST',
@@ -113,6 +127,133 @@ export const refreshApi = async (refreshToken) => {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Token refresh failed');
+  return data;
+};
+
+// Add the missing update password function
+export const updatePasswordApi = async (payload) => {
+  const res = await authFetch(`${API_BASE}/auth/password`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update password');
+  return data;
+};
+
+// Add the missing profile update functions
+export const updateProfileApi = async (payload) => {
+  const res = await authFetch(`${API_BASE}/auth/profile`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update profile');
+  return data;
+};
+
+export const updateProfileImageApi = async (formData) => {
+  const res = await authFetch(`${API_BASE}/auth/profile-image`, {
+    method: 'PATCH',
+    body: formData
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update profile image');
+  return data;
+};
+
+// Alias for uploadProfileImageApi
+export const uploadProfileImageApi = updateProfileImageApi;
+
+// Add the missing payment functions
+export const getMyPaymentsApi = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const res = await authFetch(`${API_BASE}/payments${qs ? `?${qs}` : ''}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to load payments');
+  return data;
+};
+
+export const downloadReceiptPdf = async (paymentId) => {
+  const res = await authFetch(`${API_BASE}/payments/${paymentId}/receipt`, {
+    headers: { 'Accept': 'application/pdf' }
+  });
+  if (!res.ok) throw new Error('Failed to download receipt');
+  return res.blob();
+};
+
+// Add the missing vehicle functions
+export const getMyVehiclesApi = async () => {
+  const res = await authFetch(`${API_BASE}/auth/vehicles`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to load vehicles');
+  return data;
+};
+
+export const addUserVehicleApi = async (payload) => {
+  const res = await authFetch(`${API_BASE}/auth/vehicles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to add vehicle');
+  return data;
+};
+
+export const removeUserVehicleApi = async (index) => {
+  const res = await authFetch(`${API_BASE}/auth/vehicles/${index}`, {
+    method: 'DELETE'
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to remove vehicle');
+  return data;
+};
+
+export const updateUserVehicleAtIndexApi = async (index, payload) => {
+  const res = await authFetch(`${API_BASE}/auth/vehicles/${index}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to update vehicle');
+  return data;
+};
+
+// Add the missing password reset functions
+export const requestPasswordResetOtpApi = async (email) => {
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to request password reset');
+  return data;
+};
+
+export const verifyPasswordResetOtpApi = async (email, otp) => {
+  const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to verify OTP');
+  return data;
+};
+
+export const resetPasswordWithOtpApi = async (email, otp, newPassword) => {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp, newPassword })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || 'Failed to reset password');
   return data;
 };
 
